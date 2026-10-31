@@ -1,0 +1,21 @@
+{
+  "name": "svnet-cli",
+  "version": "0.1.0",
+  "description": "Consulta disponibilidad y WHOIS de dominios .sv desde Bun o la terminal",
+  "type": "module",
+  "exports": "./src/index.js",
+  "bin": {
+    "svnet": "./bin/svnet.js"
+  },
+  "files": ["src", "bin", "README.md"],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "scripts": {
+    "start": "bun bin/svnet.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "entities": "^8.1.0"
+  }
+}
