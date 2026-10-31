@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { search, whois } from "../src/index.js";
+import { search, whois } from "../src/index.ts";
 
 const SEARCH_HTML = `<div class="flex-container"><div class="col-6">
   <h4>Dominios Disponibles</h4>
@@ -88,7 +88,7 @@ test("búsqueda y WHOIS por nombre e ID, con validación y errores de transporte
 });
 
 test("el CLI muestra ayuda y falla sin consultar la red ante argumentos inválidos", () => {
-  const cli = new URL("../bin/svnet.js", import.meta.url).pathname;
+  const cli = new URL("../bin/svnet.ts", import.meta.url).pathname;
   const run = (...args) => Bun.spawnSync([process.execPath, cli, ...args]);
   const help = run("--help");
   expect(help.exitCode).toBe(0);
@@ -108,7 +108,7 @@ test("el CLI muestra ayuda y falla sin consultar la red ante argumentos inválid
 });
 
 test("colores y progreso en terminal, limpieza al fallar o cancelar y pipes/JSON sin adornos", async () => {
-  const cli = new URL("../bin/svnet.js", import.meta.url);
+  const cli = new URL("../bin/svnet.ts", import.meta.url);
   const run = async (args, { tty = false, env = {}, fail = false, cancel = false } = {}) => {
     const script = `
       process.argv = ${JSON.stringify([process.execPath, cli.pathname, ...args])};

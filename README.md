@@ -1,6 +1,6 @@
 # svnet-cli
 
-Librería JavaScript y CLI **no oficial** para consultar disponibilidad y fichas WHOIS públicas de SVNet. Requiere Bun >= 1.3.
+Librería TypeScript y CLI **no oficial** para consultar disponibilidad y fichas WHOIS públicas de SVNet. Requiere Bun >= 1.3.
 
 ## Instalar y ejecutar
 
@@ -11,6 +11,15 @@ bun link
 svnet search mi.sv
 svnet whois mi.sv
 ```
+
+Para crear un ejecutable independiente, sin necesitar Bun en la máquina de destino:
+
+```sh
+bun run build
+./dist/svnet --help
+```
+
+El ejecutable se compila para la plataforma actual; `bun link` instala el comando basado en Bun, no este binario.
 
 ## Comandos
 
@@ -58,6 +67,7 @@ Los campos WHOIS opcionales ausentes son `null`. Las fechas conservan el formato
 
 ```sh
 bun test
+bun run typecheck
 ```
 
 Las pruebas usan respuestas simuladas, sin consultar SVNet ni almacenar datos personales reales.
