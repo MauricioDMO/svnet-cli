@@ -1,69 +1,75 @@
+<div align="center">
+
 # svnet-cli
 
-Librería TypeScript y CLI **no oficial** para consultar disponibilidad y fichas WHOIS públicas de SVNet. Requiere Bun >= 1.3.
+**Disponibilidad y WHOIS de dominios .sv, desde tu terminal.**
 
-## Instalar y ejecutar
+![Bun >= 1.3](https://img.shields.io/badge/Bun-%E2%89%A5%201.3-f9f1e1?logo=bun&logoColor=000)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=fff)
+[![Licencia MIT](https://img.shields.io/badge/Licencia-MIT-green)](LICENSE)
+
+</div>
+
+> [!IMPORTANT]
+> CLI y librería TypeScript **no oficiales**, sin afiliación con SVNet. Solo consulta información pública; no registra ni modifica dominios.
+
+## Inicio rápido
+
+Requiere **Bun >= 1.3**. Desde el directorio del proyecto:
 
 ```sh
 bun install
-# Registrar el comando global en esta máquina
-bun link
+bun link # Registrar el comando global en esta máquina
+
 svnet search mi.sv
 svnet whois mi.sv
 ```
 
-Para crear un ejecutable independiente, sin necesitar Bun en la máquina de destino:
+Para compilar un ejecutable independiente de Bun, para la plataforma actual:
 
 ```sh
 bun run build
 ./dist/svnet --help
 ```
 
-El ejecutable se compila para la plataforma actual; `bun link` instala el comando basado en Bun, no este binario.
-
 ## Comandos
 
+| Comando | Qué hace |
+| --- | --- |
+| `svnet search mi` | Busca todas las extensiones que devuelve SVNet. |
+| `svnet search mi.com.sv` | Consulta solo ese dominio. |
+| `svnet whois mi.sv` | Resuelve el ID y consulta la ficha WHOIS. |
+| `svnet whois 36876 --json` | Consulta WHOIS directamente por ID, en JSON. |
+| `svnet --help` | Muestra la ayuda. |
+
+Atajos: `-s` para `search` y `-w` para `whois`. Un nombre numérico en `whois` es un ID; usa `123.sv` para consultar el dominio.
+
+**Opciones:** `--json`, `--timeout <ms>` (por defecto `15000`) y `--no-color` o `NO_COLOR`.
+
 ```sh
-svnet search mi                         # Todas las extensiones que devuelve SVNet
-svnet search mi.com.sv                  # Solo ese dominio
-svnet whois mi.sv                       # Resuelve el ID antes de consultar WHOIS
-svnet whois mi                         # Equivale a mi.sv
-svnet whois 36876 --json                # Consulta directa por ID
-svnet -s mi                             # Atajo para search
-svnet -w mi.sv                          # Atajo para whois
 svnet search mi --json --timeout 10000
-svnet search mi --no-color
-svnet --help
 ```
 
-La búsqueda devuelve un arreglo de `{ domain, status, id }`. `status` es `available` o `registered`; los disponibles tienen `id: null`. Un nombre numérico en `whois` se interpreta como ID: para consultar el dominio usa, por ejemplo, `123.sv`.
-
-Los errores se escriben en stderr y devuelven código de salida `1`. Una consulta válida devuelve `0`, tanto para dominios disponibles como registrados. `--json` deja stdout listo para procesarlo con otras herramientas.
-
-En una terminal interactiva muestra un indicador animado durante la consulta, estados en verde (disponible) o amarillo (registrado) y errores en rojo. La búsqueda incluye un resumen y un comando sugerido para consultar WHOIS. `Ctrl+C` cancela la consulta y limpia el indicador.
-
-Los colores se desactivan con `--no-color` o la variable `NO_COLOR`. `--json`, los pipes y `TERM=dumb` no muestran animaciones ni colores; la salida JSON no incluye mensajes de progreso.
+Salida con colores e indicador animado en terminal; sin ambos con `--json`, pipes o `TERM=dumb`. Las consultas válidas devuelven código `0`; los errores, `1` y un mensaje en `stderr`.
 
 ## Librería
 
-Desde este proyecto, o después de instalarlo como dependencia local con `bun add /ruta/a/svnet-cli`:
+Úsala desde el proyecto o instálala con `bun add /ruta/a/svnet-cli`:
 
-```js
+```ts
 import { search, whois } from "svnet-cli";
 
 const domains = await search("mi");
 // [{ domain: "mi.org.sv", status: "available", id: null }, ...]
 
 const record = await whois("mi.sv", { timeout: 10000 });
-// { domain, status, id, administrativeContact, email, phone,
-//   registeredAt, expiresAt, deletionAt }
-
-const byId = await whois(36876);
 ```
 
-Los campos WHOIS opcionales ausentes son `null`. Las fechas conservan el formato `DD-MM-AAAA` del sitio. Si el dominio está disponible, `whois` devuelve únicamente `{ domain, status: "available", id: null }`. Ambas funciones aceptan `{ timeout }` en milisegundos por petición (por defecto 15000) y lanzan errores ante fallos de red, HTTP o HTML no reconocido. WHOIS por dominio puede hacer dos peticiones.
+Los estados son `available` o `registered`. Los disponibles tienen `id: null`; WHOIS devuelve solo dominio, estado e ID si están disponibles. Los campos opcionales ausentes son `null` y las fechas usan `DD-MM-AAAA`.
 
-## Pruebas
+Ambas funciones aceptan `{ timeout }` por petición y lanzan errores de red, HTTP o HTML no reconocido. WHOIS acepta dominio o ID numérico; por dominio puede hacer dos peticiones.
+
+## Desarrollo
 
 ```sh
 bun test
@@ -74,6 +80,4 @@ Las pruebas usan respuestas simuladas, sin consultar SVNet ni almacenar datos pe
 
 ## Alcance
 
-Usa POST a `https://svnet.sv/accion/procesos.php` con `URLSearchParams`: `key=Buscar&ID=1&nombre=...` y `key=Whois&ID=...`. Analiza HTML con `HTMLRewriter` nativo de Bun; `entities` decodifica las entidades HTML.
-
-No registra, renueva ni modifica dominios, ni consulta registros DNS. Depende del HTML público del sitio, no de una API oficial: cambios en SVNet pueden requerir actualizar el parser. No tiene caché ni reintentos automáticos. Consulta con moderación y trata responsablemente los datos de contacto públicos.
+Depende del HTML público de SVNet: cambios en el sitio pueden requerir actualizar el parser. Sin consultas DNS, caché ni reintentos automáticos. Consulta con moderación y trata responsablemente los datos de contacto públicos.
