@@ -27,7 +27,9 @@ function handleDomains(url: URL) {
       const state = url.searchParams.get("status") || "";
       const extension = url.searchParams.get("extension") || "";
       const requested = url.searchParams.get("page") || "1";
+      const limit = Number(url.searchParams.get("limit") ?? "10");
       if (!/^[1-9]\d*$/.test(requested) || !Number.isSafeInteger(Number(requested)) ||
+        ![10, 25, 50, 100].includes(limit) ||
         (state && !["available", "unavailable", "mixed", "unknown"].includes(state)) || (extension && !extensions.includes(extension))) {
         return Response.json({ error: "Filtros o página inválidos." }, { status: 400 });
       }
@@ -40,9 +42,9 @@ function handleDomains(url: URL) {
       const groups = groupRows(rows);
       const filtered = groups.filter(group => (!query || group.palabra.includes(query) || group.domains.some(row => row.dominio.includes(query))) &&
         (!state || group.estado === state) && (!extension || group.domains.some(row => row.dominio === group.palabra + extension && row.estado !== "unknown")));
-      const pages = Math.max(1, Math.ceil(filtered.length / 10));
+      const pages = Math.max(1, Math.ceil(filtered.length / limit));
       const page = Math.min(Number(requested), pages);
-      return Response.json({ results: filtered.slice((page - 1) * 10, page * 10), total: filtered.length, count: groups.length, page, pages, indexed: rows.some(row => row.palabra === word) });
+      return Response.json({ results: filtered.slice((page - 1) * limit, page * limit), total: filtered.length, count: groups.length, page, pages, indexed: rows.some(row => row.palabra === word) });
 }
 
 async function handle(request: Request) {

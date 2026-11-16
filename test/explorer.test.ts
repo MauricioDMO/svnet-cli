@@ -50,6 +50,10 @@ test("importación, exclusión de sincronización y API del explorador", async (
     expect(ranked.results.map((item: { palabra: string }) => item.palabra)).toEqual(["tal", "tala", "talo", "talx0", "talx1", "talx2", "talx3", "talx4", "talx5", "talx6"]);
     const secondPage = await (await fetch(`${base}api/dominios?q=tal&page=2`)).json();
     expect(secondPage.results.map((item: { palabra: string }) => item.palabra)).toEqual(["talx7", "talvez", "fatal"]);
+    const largerPage = await (await fetch(`${base}api/dominios?q=tal&limit=25&page=2`)).json();
+    expect(largerPage).toMatchObject({ total: 13, page: 1, pages: 1 });
+    expect(largerPage.results).toHaveLength(13);
+    expect((await fetch(`${base}api/dominios?limit=0`)).status).toBe(400);
     expect((await (await fetch(`${base}api/dominios?q=tal.sv`)).json()).results[0].palabra).toBe("tal");
     expect((await (await fetch(`${base}api/dominios?q=%25`)).json()).total).toBe(0);
     expect((await (await fetch(`${base}api/dominios?q=_`)).json()).total).toBe(0);

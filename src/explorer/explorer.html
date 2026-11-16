@@ -11,7 +11,7 @@ header{background:#12365d;color:#fff;padding:12px max(24px,calc((100vw - 1100px)
 header p{margin:0;color:#bad0eb;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase}
 h1{font-size:1.3rem;letter-spacing:-.03em;margin:0}
 header span{color:#d5e4f5;font-size:.8rem}main{max-width:1100px;margin:auto;padding:18px 24px 40px}
-.controls{display:grid;grid-template-columns:2fr auto 1fr 1fr;gap:14px;align-items:end}.controls>button{min-height:48px;white-space:nowrap;background:#195bb8;border-color:#195bb8;color:#fff;font-weight:650}
+.controls{display:grid;grid-template-columns:2fr auto 1fr;gap:14px;align-items:end}.controls>button{min-height:48px;white-space:nowrap;background:#195bb8;border-color:#195bb8;color:#fff;font-weight:650}
 label{font-weight:650;font-size:.85rem}input,select{display:block;width:100%;margin-top:6px;border:1px solid #b5c9df;border-radius:8px;padding:12px;background:#fff;color:var(--ink);font:inherit}
 input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #76a9ed;outline-offset:2px}
 .summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:16px 0 8px}
@@ -19,7 +19,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid 
 .table{border:1px solid var(--line);border-radius:10px;background:white;overflow:auto}
 table{width:100%;border-collapse:collapse;text-align:left;font-size:.9rem}th{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#627c98;background:var(--pale)}td,th{padding:6px 12px;border-bottom:1px solid #eaf0f6}
 tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color:#173e70}.badge{display:inline-block;border-radius:20px;background:#e5f6ee;color:#126447;padding:3px 10px;font-size:.8rem;font-weight:700}.registered,.unavailable,.reserved{background:#fde5e5;color:#a52424}.unknown{background:#edf0f5;color:#4b5a70}
-.pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:18px}button{border:1px solid #b5c9df;background:white;border-radius:7px;padding:8px 14px;color:var(--ink);cursor:pointer}button:disabled{opacity:.4;cursor:default}
+.pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:18px}.pagination select{width:auto;margin:0;padding:8px}button{border:1px solid #b5c9df;background:white;border-radius:7px;padding:8px 14px;color:var(--ink);cursor:pointer}button:disabled{opacity:.4;cursor:default}
 .table button{padding:4px 10px;font-size:.85rem}@media(max-width:650px){.controls{grid-template-columns:1fr}td,th{padding:6px 8px}header{padding:12px 24px}}
 .detail td{background:#f3f7fc;padding:16px 20px}.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0;overflow-wrap:anywhere}.detail dt{font-weight:700;color:#506982}.detail dd{margin:0;white-space:pre-wrap}.detail-error{color:#a63737}
 .group-detail>td{background:#f3f7fc;padding:8px 16px}.group-detail table{background:#fff;border:1px solid var(--line)}.mixed{background:#fff0cf;color:#835900}
@@ -35,13 +35,12 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 <label>Buscar dominio<input id="search" type="search" placeholder="Ej. hola" autocomplete="off"></label>
 <button id="consult" type="button" disabled>Consultar en SVNet</button>
 <label>Estado del resultado<select id="status"><option value="">Todos</option><option value="available">Disponibles</option><option value="mixed">Variado</option><option value="unavailable">No disponibles</option><option value="unknown">Sin resultado</option></select></label>
-<label>Extensión<select id="extension"><option value="">Todas</option><option>.sv</option><option>.com.sv</option><option>.org.sv</option><option>.edu.sv</option><option>.gob.sv</option></select></label>
 </div>
 <p id="consult-status" role="status" hidden></p>
 <div class="summary"><p id="count" role="status">Cargando resultados…</p></div>
 <p id="empty" role="status" hidden></p>
 <div class="table"><table><thead><tr><th>Palabra</th><th>Estado</th><th>Disponibilidad .sv</th><th>Última indexación</th><th class="actions">Acciones</th></tr></thead><tbody id="rows"></tbody></table></div>
-<div class="pagination"><button id="prev" type="button">Anterior</button><span id="page"></span><button id="next" type="button">Siguiente</button></div>
+<div class="pagination"><select id="limit" aria-label="Resultados por página"><option>10</option><option>25</option><option>50</option><option>100</option></select><button id="prev" type="button">Anterior</button><span id="page"></span><button id="next" type="button">Siguiente</button></div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -121,7 +120,7 @@ async function load() {
   $('count').textContent = 'Cargando resultados…';
   $('prev').disabled = $('next').disabled = true;
   try {
-    const params = new URLSearchParams({q:$('search').value, status:$('status').value, extension:$('extension').value, page});
+    const params = new URLSearchParams({q:$('search').value, status:$('status').value, page, limit:$('limit').value});
     const response = await fetch('/api/dominios?' + params);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -181,7 +180,7 @@ $('consult').onclick = async () => {
     if (!response.ok) throw new Error(result.error);
     if ($('search').value.trim() === query) {
       if (result.reserved) $('search').value = result.word;
-      $('status').value = ''; $('extension').value = ''; page = 1;
+      $('status').value = ''; page = 1;
     }
     await load();
   } catch (error) {
@@ -199,11 +198,15 @@ $('search').addEventListener('keydown', event => {
   }
 });
 document.addEventListener('keydown', event => {
-  if (event.key !== '/' || event.ctrlKey || event.altKey || event.metaKey || event.isComposing ||
+  if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing ||
       event.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName)) return;
-  event.preventDefault(); $('search').focus();
+  if (event.key === '/') { event.preventDefault(); $('search').focus(); }
+  else if (!event.shiftKey && !event.repeat && ['ArrowLeft','ArrowRight'].includes(event.key)) {
+    const button = $(event.key === 'ArrowLeft' ? 'prev' : 'next');
+    if (!button.disabled) { event.preventDefault(); button.click(); }
+  }
 });
-for (const id of ['status','extension']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
+for (const id of ['status','limit']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
 load();
