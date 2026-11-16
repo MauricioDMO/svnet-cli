@@ -1,12 +1,13 @@
 import { test, expect } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
 test("importación, exclusión de sincronización y API del explorador", async () => {
   const dir = mkdtempSync(join(tmpdir(), "svnet-test-"));
-  const env = { ...process.env, SVNET_DATA_DIR: dir };
+  const env = { ...process.env, SVNET_DATA_DIR: dir, PATH: `${dir}:${process.env.PATH}` };
+  if (process.platform === "linux") writeFileSync(join(dir, "xdg-open"), `#!/bin/sh\nprintf '%s' "$1" > "${dir}/opened"\n`, { mode: 0o755 });
   const cli = join(import.meta.dir, "../bin/svnet.ts");
   const run = async (...args: string[]) => {
     const proc = Bun.spawn([process.execPath, cli, ...args], { env, stdout: "pipe", stderr: "pipe" });
@@ -33,7 +34,11 @@ test("importación, exclusión de sincronización y API del explorador", async (
     const reader = server.stdout!.getReader();
     const line = new TextDecoder().decode((await reader.read()).value);
     const base = line.match(/http:\/\/\S+/)?.[0];
-    expect(base).toBeTruthy();
+    expect(base).toMatch(/^http:\/\/localhost:\d+\/$/);
+    if (process.platform === "linux") {
+      for (let i = 0; i < 100 && !existsSync(join(dir, "opened")); i++) await Bun.sleep(10);
+      expect(readFileSync(join(dir, "opened"), "utf8")).toBe(base);
+    }
     const page = await fetch(base!);
     expect(page.headers.get("content-type")).toContain("text/html");
     expect(await page.text()).toContain("<h1>Explora .sv</h1>");

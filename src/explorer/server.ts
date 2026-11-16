@@ -1,4 +1,5 @@
 import html from "./explorer.html" with { type: "text" };
+import { spawn } from "node:child_process";
 import { whois } from "../index";
 import { collect } from "./collector";
 import { db, extensions, groupRows, type Row } from "../storage/store";
@@ -65,8 +66,14 @@ async function handle(request: Request) {
 export function serve() {
   for (let port = 3000; port <= 65535; port++) {
     try {
-      const server = Bun.serve({ hostname: "127.0.0.1", port, fetch: handle });
-      console.log(`Explorador disponible en ${server.url}`);
+      const server = Bun.serve({ hostname: "localhost", port, fetch: handle });
+      const url = `http://localhost:${port}/`;
+      console.log(`Explorador disponible en ${url}`);
+      const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "rundll32" : "xdg-open";
+      const args = process.platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url];
+      const browser = spawn(command, args, { stdio: "ignore", detached: true });
+      browser.on("error", () => {});
+      browser.unref();
       return server;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;

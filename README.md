@@ -51,7 +51,7 @@ Atajos: `-s` para `search` y `-w` para `whois`.
 
 ### Explorador y consulta masiva
 
-`svnet serve` abre el explorador en `http://127.0.0.1:3000` o el siguiente puerto libre.
+`svnet serve` inicia el explorador y lo abre en el navegador en `http://localhost:3000` o el siguiente puerto libre.
 Se mantiene ejecutándose hasta pulsar Ctrl+C. Solo acepta conexiones locales.
 
 `svnet sync start archivo.txt` inicia en segundo plano la consulta de las palabras
