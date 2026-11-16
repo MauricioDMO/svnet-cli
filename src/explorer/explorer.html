@@ -31,6 +31,7 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 @media(max-width:500px){.sync{padding:14px}.sync-row{gap:8px}.sync-current{gap:8px}.sync-label{font-size:.75rem}.sync-word,.sync-count{font-size:.75rem}}
 .whois-space{display:inline-block;width:30px;height:30px;margin-right:8px;vertical-align:middle}.whois-button{margin-right:8px;border-color:transparent;background:transparent}
 .table .icon-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;vertical-align:middle}.icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.expand-button{margin-right:8px;border-color:transparent;background:transparent}.expand-button svg{transition:transform .15s}.expand-button[aria-expanded="true"] svg{transform:rotate(90deg)}.actions{text-align:right;white-space:nowrap}.refreshing svg{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(-360deg)}}@media(prefers-reduced-motion:reduce){.expand-button svg{transition:none}.refreshing svg{animation:none}}
+.favorite{border-color:transparent;background:transparent;color:#a77813;font-size:1.25rem!important}.favorite[aria-pressed="true"]{color:#bd8100}.filters{display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:500}.filters input{width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -48,6 +49,7 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 <button id="consult" type="button" disabled>Consultar en SVNet</button>
 <label>Estado del resultado<select id="status"><option value="">Todos</option><option value="available">Disponibles</option><option value="mixed">Variado</option><option value="unavailable">No disponibles</option><option value="unknown">Sin resultado</option></select></label>
 </div>
+<label class="filters"><input id="featured" type="checkbox"> Solo destacados</label>
 <p id="consult-status" role="status" hidden></p>
 <div class="summary"><p id="count" role="status">Cargando resultados…</p></div>
 <p id="empty" role="status" hidden></p>
@@ -57,6 +59,7 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 <script>
 const $ = id => document.getElementById(id);
 let page = 1, pages = 1, timer, requestId = 0, consulting = false;
+const expanded = new Set();
 const labels = {domain:'Dominio', status:'Estado', id:'ID', administrativeContact:'Contacto administrativo', email:'Correo', phone:'Teléfono', registeredAt:'Registro', expiresAt:'Vencimiento', deletionAt:'Eliminación'};
 const dateFormatter = new Intl.DateTimeFormat('es-SV', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'});
 function formatDate(value) {
@@ -74,7 +77,7 @@ async function showDetail(button, row) {
   }
   button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Cerrar WHOIS de ${row.dataset.domain}`); button.title = `Cerrar WHOIS de ${row.dataset.domain}`;
   const detail = document.createElement('tr'); detail.className = 'detail';
-  const cell = detail.insertCell(); cell.colSpan = 2; cell.textContent = 'Consultando WHOIS…'; row.after(detail);
+  const cell = detail.insertCell(); cell.colSpan = 3; cell.textContent = 'Consultando WHOIS…'; row.after(detail);
   try {
     const response = await fetch('/api/whois?' + new URLSearchParams({domain: row.dataset.domain}));
     const data = await response.json();
@@ -97,10 +100,34 @@ function badge(status, group = false) {
   if (status === 'mixed' && !group) span.title = 'Los datos indexados contienen estados distintos para este dominio; consulta WHOIS para más información.';
   return span;
 }
+function favoriteButton(type, value, selected) {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = 'icon-button favorite';
+  function render() {
+    button.textContent = selected ? '★' : '☆';
+    button.setAttribute('aria-pressed', String(selected));
+    button.setAttribute('aria-label', `${selected ? 'Quitar destacado de' : 'Destacar'} ${value}`);
+    button.title = button.getAttribute('aria-label');
+  }
+  render();
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/destacados', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type, value, featured:!selected})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      selected = !selected; render();
+      if ($('featured').checked) await load();
+    } catch (error) { $('count').textContent = `No se pudo actualizar el destacado: ${error.message}`; }
+    finally { button.disabled = false; }
+  };
+  return button;
+}
 function showDomains(button, row, item) {
   if (button.getAttribute('aria-expanded') === 'true') {
-    row.nextElementSibling.remove(); button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver dominios de ${item.palabra}`); return;
+    expanded.delete(item.palabra); row.nextElementSibling.remove(); button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver dominios de ${item.palabra}`); return;
   }
+  expanded.add(item.palabra);
   button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Ocultar dominios de ${item.palabra}`);
   const detail = document.createElement('tr'); detail.className = 'group-detail';
   const cell = detail.insertCell(); cell.colSpan = 5;
@@ -124,6 +151,8 @@ function showDomains(button, row, item) {
       name.append(link);
     } else name.append(document.createTextNode(domain.dominio));
     tr.insertCell().append(badge(domain.estado));
+    const actions = tr.insertCell(); actions.className = 'actions';
+    actions.append(favoriteButton('domain', domain.dominio, domain.destacado));
     body.append(tr);
   }
   table.append(body); cell.append(table); row.after(detail);
@@ -134,6 +163,7 @@ async function load() {
   $('prev').disabled = $('next').disabled = true;
   try {
     const params = new URLSearchParams({q:$('search').value, status:$('status').value, page, limit:$('limit').value});
+    if ($('featured').checked) params.set('featured', '1');
     const response = await fetch('/api/dominios?' + params);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -172,8 +202,9 @@ async function load() {
           refresh.disabled = false; refresh.classList.remove('refreshing'); refresh.setAttribute('aria-label', `Actualizar ${item.palabra}`);
         }
       };
-      actions.append(refresh);
+      actions.append(favoriteButton('word', item.palabra, item.destacado), refresh);
       body.append(tr);
+      if (expanded.has(item.palabra) || ($('featured').checked && item.domains.some(domain => domain.destacado))) showDomains(button, tr, item);
     }
     const empty = $('empty'); empty.replaceChildren(); empty.hidden = data.total !== 0;
     if (!data.total) empty.textContent = 'No se encontraron resultados.';
@@ -220,7 +251,7 @@ document.addEventListener('keydown', event => {
     if (!button.disabled) { event.preventDefault(); button.click(); }
   }
 });
-for (const id of ['status','limit']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
+for (const id of ['status','limit','featured']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
 function connectSync() {

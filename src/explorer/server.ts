@@ -6,6 +6,21 @@ import { db, extensions, groupRows, type Row } from "../storage/store";
 import { status } from "../sync";
 
 const domainPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:(?:com|org|edu|gob)\.)?sv$/;
+const wordPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+async function handleFeatured(request: Request, url: URL) {
+  if (request.headers.get("origin") !== url.origin || !request.headers.get("content-type")?.startsWith("application/json")) return Response.json({ error: "Solicitud no autorizada." }, { status: 403 });
+  let input;
+  try { input = await request.json(); } catch { return Response.json({ error: "Solicitud inválida." }, { status: 400 }); }
+  if (!input || !["word", "domain"].includes(input.type) || typeof input.value !== "string" ||
+    !(input.type === "word" ? wordPattern : domainPattern).test(input.value) || typeof input.featured !== "boolean") {
+    return Response.json({ error: "Destacado inválido." }, { status: 400 });
+  }
+  const word = input.type === "word" ? input.value : input.value.replace(/\.(?:(?:com|org|edu|gob)\.)?sv$/, "");
+  if (!db.query("SELECT 1 FROM domains WHERE palabra = ? LIMIT 1").get(word)) return Response.json({ error: "Palabra no indexada." }, { status: 404 });
+  if (input.featured) db.query("INSERT OR IGNORE INTO featured VALUES (?, ?)").run(input.type, input.value);
+  else db.query("DELETE FROM featured WHERE type = ? AND value = ?").run(input.type, input.value);
+  return Response.json({ ok: true });
+}
 async function handleConsult(request: Request, url: URL) {
       if (request.headers.get("origin") !== url.origin || !request.headers.get("content-type")?.startsWith("application/json")) return Response.json({ error: "Solicitud no autorizada." }, { status: 403 });
       let input;
@@ -28,11 +43,12 @@ function handleDomains(url: URL) {
       const query = (url.searchParams.get("q") || "").trim().toLowerCase();
       const state = url.searchParams.get("status") || "";
       const extension = url.searchParams.get("extension") || "";
+      const featured = url.searchParams.get("featured") || "";
       const requested = url.searchParams.get("page") || "1";
       const limit = Number(url.searchParams.get("limit") ?? "10");
       if (!/^[1-9]\d*$/.test(requested) || !Number.isSafeInteger(Number(requested)) ||
         ![10, 25, 50, 100].includes(limit) ||
-        (state && !["available", "unavailable", "mixed", "unknown"].includes(state)) || (extension && !extensions.includes(extension))) {
+        (state && !["available", "unavailable", "mixed", "unknown"].includes(state)) || (extension && !extensions.includes(extension)) || (featured && featured !== "1")) {
         return Response.json({ error: "Filtros o página inválidos." }, { status: 400 });
       }
       const word = query.replace(/\.(?:(?:com|org|edu|gob)\.)?sv$/, "");
@@ -41,9 +57,14 @@ function handleDomains(url: URL) {
              WHEN instr(palabra, ?1) = 1 THEN 70 ELSE 30 END DESC,
         CASE WHEN ?1 <> '' THEN length(palabra) END,
         CASE WHEN ?1 <> '' THEN palabra END, rowid`).all(word);
-      const groups = groupRows(rows);
+      const marks = db.query<{ type: string; value: string }, []>("SELECT type, value FROM featured").all();
+      const words = new Set(marks.filter(mark => mark.type === "word").map(mark => mark.value));
+      const domains = new Set(marks.filter(mark => mark.type === "domain").map(mark => mark.value));
+      const groups = groupRows(rows).map(group => ({ ...group, destacado: words.has(group.palabra),
+        domains: group.domains.map(domain => ({ ...domain, destacado: domains.has(domain.dominio) })) }));
       const filtered = groups.filter(group => (!query || group.palabra.includes(query) || group.domains.some(row => row.dominio.includes(query))) &&
-        (!state || group.estado === state) && (!extension || group.domains.some(row => row.dominio === group.palabra + extension && row.estado !== "unknown")));
+        (!state || group.estado === state) && (!extension || group.domains.some(row => row.dominio === group.palabra + extension && row.estado !== "unknown")) &&
+        (!featured || group.destacado || group.domains.some(domain => domain.destacado)));
       const pages = Math.max(1, Math.ceil(filtered.length / limit));
       const page = Math.min(Number(requested), pages);
       return Response.json({ results: filtered.slice((page - 1) * limit, page * limit), total: filtered.length, count: groups.length, page, pages, indexed: rows.some(row => row.palabra === word) });
@@ -53,6 +74,7 @@ async function handle(request: Request) {
   const url = new URL(request.url);
   try {
     if (request.method === "POST" && url.pathname === "/api/consultar") return await handleConsult(request, url);
+    if (request.method === "POST" && url.pathname === "/api/destacados") return await handleFeatured(request, url);
     if (request.method !== "GET") return new Response("Método no permitido", { status: 405 });
     if (url.pathname === "/") return new Response(html as unknown as string, { headers: { "Content-Type": "text/html; charset=utf-8" } });
     if (url.pathname === "/api/whois") return await handleWhois(url);

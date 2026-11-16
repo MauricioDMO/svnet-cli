@@ -11,6 +11,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS domains (
   palabra TEXT NOT NULL, dominio TEXT NOT NULL, estado TEXT NOT NULL, id INTEGER, indexado_en TEXT
 );
 CREATE INDEX IF NOT EXISTS domains_word ON domains(palabra);
+CREATE TABLE IF NOT EXISTS featured (type TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (type, value));
 CREATE TABLE IF NOT EXISTS sync (id INTEGER PRIMARY KEY CHECK (id=1), pid INTEGER, state TEXT, word TEXT, error TEXT, started TEXT, finished TEXT);
 CREATE TABLE IF NOT EXISTS sync_words (word TEXT PRIMARY KEY, position INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sync_list (id INTEGER PRIMARY KEY CHECK (id=1), source TEXT NOT NULL);

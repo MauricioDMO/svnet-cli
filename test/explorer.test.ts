@@ -104,7 +104,51 @@ test("importación, exclusión de sincronización y API del explorador", async (
     seed.query("INSERT INTO domains VALUES ('tu', 'tu.sv', ?, ?, NULL)").run("registered", 37000);
     seed.close();
     const contradictory = await (await fetch(`${base}api/dominios?q=tu`)).json();
-    expect(contradictory.results[0]).toMatchObject({ palabra: "tu", estado: "mixed", sv: "mixed", domains: expect.arrayContaining([{ dominio: "tu.sv", estado: "mixed" }]) });
+    expect(contradictory.results[0]).toMatchObject({ palabra: "tu", estado: "mixed", sv: "mixed", domains: expect.arrayContaining([expect.objectContaining({ dominio: "tu.sv", estado: "mixed", destacado: false })]) });
+    const postFeatured = (body: unknown, origin = new URL(base).origin, contentType = "application/json") =>
+      fetch(`${base}api/destacados`, { method: "POST", headers: { Origin: origin, "Content-Type": contentType }, body: JSON.stringify(body) });
+    const featured = async () => (await (await fetch(`${base}api/dominios?featured=1`)).json()).results;
+    expect(await featured()).toEqual([]);
+    expect((await postFeatured({ type: "word", value: "hola", featured: true })).status).toBe(200);
+    expect((await postFeatured({ type: "domain", value: "tal.sv", featured: true })).status).toBe(200);
+    let marked = await featured();
+    expect(marked.map((group: { palabra: string }) => group.palabra).sort()).toEqual(["hola", "tal"]);
+    expect(marked.find((group: { palabra: string }) => group.palabra === "hola")).toMatchObject({
+      destacado: true, domains: expect.arrayContaining([expect.objectContaining({ dominio: "hola.sv", destacado: false })]),
+    });
+    expect(marked.find((group: { palabra: string }) => group.palabra === "tal")).toMatchObject({
+      destacado: false, domains: expect.arrayContaining([expect.objectContaining({ dominio: "tal.sv", destacado: true })]),
+    });
+
+    const refresh = Bun.spawn([process.execPath, "-e", `
+      const { save } = await import(${JSON.stringify(new URL("../src/storage/store.ts", import.meta.url).href)});
+      for (const word of ["hola", "tal"]) save(word, [{ palabra: word, dominio: word + ".sv", estado: "available", id: null, indexado_en: null }], true);
+    `], { env, stdout: "pipe", stderr: "pipe" });
+    const [refreshErr, refreshCode] = await Promise.all([new Response(refresh.stderr).text(), refresh.exited]);
+    expect({ code: refreshCode, err: refreshErr }).toEqual({ code: 0, err: "" });
+    marked = await featured();
+    expect(marked.find((group: { palabra: string }) => group.palabra === "hola")).toMatchObject({ destacado: true, sv: "available" });
+    expect(marked.find((group: { palabra: string }) => group.palabra === "tal")).toMatchObject({
+      destacado: false, sv: "available", domains: expect.arrayContaining([expect.objectContaining({ dominio: "tal.sv", destacado: true })]),
+    });
+
+    const disableWord = { type: "word", value: "hola", featured: false };
+    expect((await postFeatured(disableWord, "http://evil.example")).status).toBe(403);
+    expect((await postFeatured(disableWord, "", "application/json")).status).toBe(403);
+    expect((await postFeatured(disableWord, new URL(base).origin, "text/plain")).status).toBe(403);
+    for (const invalid of [
+      { type: "other", value: "hola", featured: true },
+      { type: "word", value: "hola.sv", featured: true },
+      { type: "domain", value: "hola.com", featured: true },
+      { type: "word", value: "hola", featured: "false" },
+    ]) expect((await postFeatured(invalid)).status).toBe(400);
+    expect((await postFeatured({ type: "word", value: "noindexada", featured: true })).status).toBe(404);
+    expect((await fetch(`${base}api/dominios?featured=invalid`)).status).toBe(400);
+    expect((await featured()).map((group: { palabra: string }) => group.palabra).sort()).toEqual(["hola", "tal"]);
+    expect((await postFeatured(disableWord)).status).toBe(200);
+    expect((await featured()).map((group: { palabra: string }) => group.palabra)).toEqual(["tal"]);
+    expect((await postFeatured({ type: "domain", value: "tal.sv", featured: false })).status).toBe(200);
+    expect(await featured()).toEqual([]);
     const ranked = await (await fetch(`${base}api/dominios?q=tal`)).json();
     expect(ranked.results.map((item: { palabra: string }) => item.palabra)).toEqual(["tal", "tala", "talo", "talx0", "talx1", "talx2", "talx3", "talx4", "talx5", "talx6"]);
     const secondPage = await (await fetch(`${base}api/dominios?q=tal&page=2`)).json();
