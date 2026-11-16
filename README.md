@@ -105,6 +105,7 @@ const ficha = await whois("mi.sv", { timeout: 10000 });
 ```
 
 - `status` puede ser `available` (disponible) o `registered` (registrado).
+- Los registros BSA pueden aparecer como `registered` con `id: null`; SVNet no proporciona un ID para consultar su ficha WHOIS.
 - Si SVNet devuelve ambos estados para un dominio, `search` conserva ambos resultados y el explorador lo marca como contradictorio. `whois` consulta el registro y valida que corresponda al dominio; si hay varios IDs distintos, devuelve un error en vez de elegir uno arbitrariamente.
 - Los campos sin información aparecen como `null`.
 - Las fechas usan el formato `DD-MM-AAAA`.

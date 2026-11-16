@@ -22,6 +22,21 @@ const WHOIS_HTML = `<div><strong>mi.sv</strong><span>Registrado</span><table>
   <tr><td>Fecha de Baja:</td><td>27-10-2027</td></tr>
   </table></div>`;
 
+test("reconoce registros BSA sin ID en la alerta de búsqueda", async () => {
+  const html = `<div class="alert alert-warning">Los nombres de dominio: <strong><br/>rabo.com.sv<br/>rabo.sv<br/>rabo.org.sv<br/></strong> Se encuentran <h6>REGISTRADOS BSA</h6></div>
+    <div class="col-12"><strong>rabo.edu.sv</strong><button>Disponible</button></div>
+    <div class="col-12"><strong>rabo.gob.sv</strong><button>Disponible</button></div>`;
+  const options = { fetch: async () => new Response(html) };
+  expect(await search("rabo", options)).toEqual([
+    { domain: "rabo.edu.sv", status: "available", id: null },
+    { domain: "rabo.gob.sv", status: "available", id: null },
+    { domain: "rabo.com.sv", status: "registered", id: null },
+    { domain: "rabo.sv", status: "registered", id: null },
+    { domain: "rabo.org.sv", status: "registered", id: null },
+  ]);
+  expect(await whois("rabo.sv", options)).toEqual({ domain: "rabo.sv", status: "registered", id: null });
+});
+
 test("WHOIS consulta el registro aunque SVNet también lo marque disponible", async () => {
   const conflicting = SEARCH_HTML.replace('<h4>Dominios Disponibles</h4>', '<h4>Dominios Disponibles</h4><div class="col-12"><strong>mi.sv</strong><button>Disponible</button></div>');
   const options = { fetch: async (_, init) => new Response(init.body.get("key") === "Buscar" ? conflicting : WHOIS_HTML) };

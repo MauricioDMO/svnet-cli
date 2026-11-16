@@ -5,9 +5,14 @@ import type { Domain, WhoisRecord } from "./types";
 export function parseSearch(html: string, name: string, base: string): Domain[] {
   const entries: { domain: string; label: string; id: number | null }[] = [];
   let alert = "";
+  let warning = "";
+  let bsaDomains = "";
   let entry: (typeof entries)[number];
   new HTMLRewriter()
     .on("div.alert.alert-danger", { text(chunk) { alert += chunk.text; } })
+    .on("div.alert.alert-warning", { text(chunk) { warning += chunk.text; } })
+    .on("div.alert.alert-warning strong", { text(chunk) { bsaDomains += chunk.text; } })
+    .on("div.alert.alert-warning strong br", { element() { bsaDomains += " "; } })
     .on("div.col-12", {
       element() {
         entry = { domain: "", label: "", id: null };
@@ -24,11 +29,12 @@ export function parseSearch(html: string, name: string, base: string): Domain[] 
     })
     .transform(html);
 
-  if (!entries.length && clean(alert).toLowerCase() === `este nombre de dominio: ${base} es reservado por svnet, no se puede registrar`) {
+  const bsa = /\bregistrados\s+bsa\b/i.test(clean(warning)) ? clean(bsaDomains).split(/\s+/).filter(Boolean) : [];
+  if (!entries.length && !bsa.length && clean(alert).toLowerCase() === `este nombre de dominio: ${base} es reservado por svnet, no se puede registrar`) {
     throw new Error(`${base} es reservado por SVNet y no se puede registrar.`);
   }
-  if (!entries.length) throw new Error("Respuesta de búsqueda no reconocida de SVNet.");
-  const results = entries.map(({ domain, label, id }) => {
+  if (!entries.length && !bsa.length) throw new Error("Respuesta de búsqueda no reconocida de SVNet.");
+  const results: Domain[] = entries.map(({ domain, label, id }) => {
     domain = clean(domain).toLowerCase();
     label = clean(label).toLowerCase();
     if (normalizeName(domain) !== domain || !domain.endsWith(".sv") ||
@@ -40,6 +46,12 @@ export function parseSearch(html: string, name: string, base: string): Domain[] 
       ? { domain, status: "available" as const, id: null }
       : { domain, status: "registered" as const, id: id as number };
   });
+  for (const domain of bsa) {
+    if (normalizeName(domain) !== domain || !domain.endsWith(".sv") || domain.split(".")[0] !== base) {
+      throw new Error("Respuesta de búsqueda incompleta o no reconocida de SVNet.");
+    }
+    results.push({ domain, status: "registered", id: null });
+  }
   const filtered = name.includes(".") ? results.filter((result) => result.domain === name) : results;
   if (!filtered.length) throw new Error(`SVNet no devolvió información para ${name}.`);
   return filtered;

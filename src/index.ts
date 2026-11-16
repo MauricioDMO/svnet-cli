@@ -23,10 +23,12 @@ export async function whois(value: string | number, options?: RequestOptions): P
     const results = await search(expectedDomain, options);
     const registered = results.filter(result => result.status === "registered");
     if (!registered.length) return results[0];
-    if (new Set(registered.map(result => result.id)).size > 1) {
+    const ids = registered.map(result => result.id).filter((id): id is number => id !== null);
+    if (new Set(ids).size > 1) {
       throw new Error(`SVNet devolvió múltiples IDs de registro para ${expectedDomain}.`);
     }
-    id = registered[0].id;
+    if (!ids.length) return registered[0];
+    id = ids[0];
   }
   id = Number(id);
   if (!Number.isSafeInteger(id) || id < 1) throw new Error("El ID de WHOIS debe ser un entero positivo seguro.");
