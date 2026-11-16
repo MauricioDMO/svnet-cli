@@ -1,12 +1,13 @@
 export const HELP = `svnet — disponibilidad y WHOIS de dominios .sv
 
 Uso:
-  svnet search <dominio>       [--json] [--timeout <ms>]
-  svnet whois <dominio|id>      [--json] [--timeout <ms>]
-  svnet -s <dominio>            [--json] [--timeout <ms>]
-  svnet -w <dominio|id>         [--json] [--timeout <ms>]
-  svnet serve                   Iniciar el explorador local
-  svnet sync start|status|progress
+  svnet search <dominio>         [--json] [--timeout <ms>]
+  svnet whois <dominio|id>       [--json] [--timeout <ms>]
+  svnet -s <dominio>             [--json] [--timeout <ms>]
+  svnet -w <dominio|id>          [--json] [--timeout <ms>]
+  svnet serve                    Iniciar el explorador local
+  svnet sync start [archivo.txt] Iniciar consulta masiva
+  svnet sync status|progress     Consultar progreso
   svnet sync import <archivo.csv>
 
 Ejemplos:

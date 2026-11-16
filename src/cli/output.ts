@@ -1,4 +1,4 @@
-import type { Domain, WhoisRecord } from "./types";
+import type { Domain, WhoisRecord } from "../svnet/types";
 import { color, statusLabel } from "./terminal";
 
 export function output(result: Domain[] | Domain | WhoisRecord, json?: boolean) {

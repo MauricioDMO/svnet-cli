@@ -1,10 +1,18 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import wordsText from "./es-5000.txt" with { type: "text" };
-import { collect } from "./collector";
-import { complete, db, groupRows, rowsFor, save, type Row } from "./store";
+import { collect } from "../explorer/collector";
+import { complete, db, groupRows, rowsFor, save, type Row } from "../storage/store";
 
-const words = [...new Set(wordsText.split(/\r?\n/).map(word => word.trim()).filter(Boolean))];
+function parseWords(text: string) {
+  const words = text.replace(/^\uFEFF/, "").split(/\r?\n/).map(word => word.trim().toLowerCase()).filter(Boolean);
+  const invalid = words.find(word => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(word));
+  if (invalid) throw new Error(`Palabra inválida en el archivo: ${invalid}`);
+  if (!words.length) throw new Error("El archivo de palabras está vacío.");
+  return [...new Set(words)];
+}
+const defaultWords = parseWords(wordsText);
 type Sync = { pid: number | null; state: string; word: string | null; error: string | null; started: string | null; finished: string | null };
 function alive(pid: number | null) {
   if (!pid) return false;
@@ -13,17 +21,24 @@ function alive(pid: number | null) {
 export function status() {
   const sync = db.query<Sync, []>("SELECT pid, state, word, error, started, finished FROM sync WHERE id=1").get()!;
   const running = sync.state === "running" && alive(sync.pid);
+  const list = db.query<{ source: string }, []>("SELECT source FROM sync_list WHERE id=1").get();
+  const words = list ? db.query<{ word: string }, []>("SELECT word FROM sync_words ORDER BY position").all().map(row => row.word) : defaultWords;
   const done = words.filter(word => complete(word, rowsFor(word))).length;
-  return { ...sync, state: sync.state === "running" && !running ? "interrupted" : sync.state, running, completed: done, total: words.length, remaining: words.length - done };
+  return { ...sync, state: sync.state === "running" && !running ? "interrupted" : sync.state, running, source: list?.source || "lista incluida", completed: done, total: words.length, remaining: words.length - done };
 }
-const claim = db.transaction(() => {
+const claim = db.transaction((words: string[], source: string) => {
   const current = db.query<Sync, []>("SELECT * FROM sync WHERE id=1").get()!;
   if (current.state === "running" && alive(current.pid)) return false;
+  db.exec("DELETE FROM sync_words");
+  const insert = db.query("INSERT INTO sync_words (word, position) VALUES (?, ?)");
+  words.forEach((word, index) => insert.run(word, index));
+  db.query("INSERT OR REPLACE INTO sync_list (id, source) VALUES (1, ?)").run(source);
   db.query("UPDATE sync SET pid=?, state='running', word=NULL, error=NULL, started=?, finished=NULL WHERE id=1").run(process.pid, new Date().toISOString());
   return true;
 });
 export async function worker() {
-  if (!claim.immediate()) {
+  const { words, source } = JSON.parse(await Bun.stdin.text()) as { words: string[]; source: string };
+  if (!claim.immediate(words, source)) {
     console.log("busy");
     return;
   }
@@ -39,11 +54,14 @@ export async function worker() {
     db.query("UPDATE sync SET state='error', error=?, finished=? WHERE id=1").run(error instanceof Error ? error.message : String(error), new Date().toISOString());
   }
 }
-export async function start() {
+export async function start(path?: string) {
   const current = status();
   if (current.running) return current;
+  const source = path ? resolve(path) : "lista incluida";
+  const words = path ? parseWords(readFileSync(source, "utf8")) : defaultWords;
   const args = Bun.main.startsWith("/$bunfs/") ? ["sync", "_worker"] : [Bun.main, "sync", "_worker"];
-  const child = spawn(process.execPath, args, { detached: true, stdio: ["ignore", "pipe", "ignore"], env: process.env });
+  const child = spawn(process.execPath, args, { detached: true, stdio: ["pipe", "pipe", "ignore"], env: process.env });
+  child.stdin!.end(JSON.stringify({ words, source }));
   const response = await new Promise<string>((resolve, reject) => {
     child.once("error", reject);
     child.stdout!.once("data", chunk => resolve(String(chunk).trim()));

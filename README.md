@@ -54,11 +54,14 @@ Atajos: `-s` para `search` y `-w` para `whois`.
 `svnet serve` abre el explorador en `http://127.0.0.1:3000` o el siguiente puerto libre.
 Se mantiene ejecutándose hasta pulsar Ctrl+C. Solo acepta conexiones locales.
 
-`svnet sync start` inicia en segundo plano la consulta de la lista española incluida.
+`svnet sync start archivo.txt` inicia en segundo plano la consulta de las palabras
+del archivo (una por línea). `svnet sync start` pregunta antes de usar la lista
+española incluida.
 Solo puede ejecutarse una sincronización a la vez; si ya está activa, `start`
 muestra su progreso sin iniciar otra. Si falla o se interrumpe,
 vuelve a ejecutar el comando para continuar. `svnet sync status` y
-`svnet sync progress` muestran estado, palabra actual y conteos en JSON.
+`svnet sync progress` muestran estado, lista, palabra actual y conteos en JSON.
+Para continuar con una lista propia, vuelve a pasar el mismo archivo.
 
 Los resultados se guardan en `~/.local/share/svnet/dominios.sqlite` (o en
 `$XDG_DATA_HOME/svnet`). Para elegir otra carpeta, usa `SVNET_DATA_DIR`.

@@ -12,6 +12,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS domains (
 );
 CREATE INDEX IF NOT EXISTS domains_word ON domains(palabra);
 CREATE TABLE IF NOT EXISTS sync (id INTEGER PRIMARY KEY CHECK (id=1), pid INTEGER, state TEXT, word TEXT, error TEXT, started TEXT, finished TEXT);
+CREATE TABLE IF NOT EXISTS sync_words (word TEXT PRIMARY KEY, position INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS sync_list (id INTEGER PRIMARY KEY CHECK (id=1), source TEXT NOT NULL);
 INSERT OR IGNORE INTO sync (id, state) VALUES (1, 'idle');`);
 
 export type Row = { palabra: string; dominio: string; estado: string; id: number | null; indexado_en: string | null };

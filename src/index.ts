@@ -1,9 +1,9 @@
-import { normalizeName } from "./domain";
-import { parseSearch, parseWhois } from "./parser";
-import { post } from "./request";
-import type { Domain, RequestOptions, WhoisRecord } from "./types";
+import { normalizeName } from "./svnet/domain";
+import { parseSearch, parseWhois } from "./svnet/parser";
+import { post } from "./svnet/request";
+import type { Domain, RequestOptions, WhoisRecord } from "./svnet/types";
 
-export type { Domain, RequestOptions, WhoisRecord } from "./types";
+export type { Domain, RequestOptions, WhoisRecord } from "./svnet/types";
 
 /** Busca un nombre en todas las extensiones; un dominio completo filtra el resultado. */
 export async function search(value: string, options?: RequestOptions): Promise<Domain[]> {

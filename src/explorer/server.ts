@@ -1,13 +1,10 @@
-import html from "./explorer.html.txt" with { type: "text" };
-import { whois } from "./index";
+import html from "./explorer.html" with { type: "text" };
+import { whois } from "../index";
 import { collect } from "./collector";
-import { db, extensions, groupRows, type Row } from "./store";
+import { db, extensions, groupRows, type Row } from "../storage/store";
 
 const domainPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:(?:com|org|edu|gob)\.)?sv$/;
-async function handle(request: Request) {
-  const url = new URL(request.url);
-  try {
-    if (request.method === "POST" && url.pathname === "/api/consultar") {
+async function handleConsult(request: Request, url: URL) {
       if (request.headers.get("origin") !== url.origin || !request.headers.get("content-type")?.startsWith("application/json")) return Response.json({ error: "Solicitud no autorizada." }, { status: 403 });
       let input;
       try { input = await request.json(); } catch { return Response.json({ error: "Solicitud inválida." }, { status: 400 }); }
@@ -16,16 +13,16 @@ async function handle(request: Request) {
       if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(word)) return Response.json({ error: "Escribe una palabra o un dominio .sv válido." }, { status: 400 });
       try { return Response.json(await collect(word, input.refresh === true)); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : "No se pudo consultar SVNet." }, { status: 502 }); }
-    }
-    if (request.method !== "GET") return new Response("Método no permitido", { status: 405 });
-    if (url.pathname === "/") return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    if (url.pathname === "/api/whois") {
+}
+
+async function handleWhois(url: URL) {
       const domain = url.searchParams.get("domain") || "";
       if (!domainPattern.test(domain)) return Response.json({ error: "Dominio .sv inválido." }, { status: 400 });
       try { return Response.json(await whois(domain, { timeout: 30000 })); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : "No se pudo consultar el dominio." }, { status: 502 }); }
-    }
-    if (url.pathname === "/api/dominios") {
+}
+
+function handleDomains(url: URL) {
       const query = (url.searchParams.get("q") || "").trim().toLowerCase();
       const state = url.searchParams.get("status") || "";
       const extension = url.searchParams.get("extension") || "";
@@ -42,7 +39,16 @@ async function handle(request: Request) {
       const pages = Math.max(1, Math.ceil(filtered.length / 10));
       const page = Math.min(Number(requested), pages);
       return Response.json({ results: filtered.slice((page - 1) * 10, page * 10), total: filtered.length, count: groups.length, page, pages, indexed: rows.some(row => row.palabra === word) });
-    }
+}
+
+async function handle(request: Request) {
+  const url = new URL(request.url);
+  try {
+    if (request.method === "POST" && url.pathname === "/api/consultar") return await handleConsult(request, url);
+    if (request.method !== "GET") return new Response("Método no permitido", { status: 405 });
+    if (url.pathname === "/") return new Response(html as unknown as string, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    if (url.pathname === "/api/whois") return await handleWhois(url);
+    if (url.pathname === "/api/dominios") return handleDomains(url);
     return new Response("No encontrado", { status: 404 });
   } catch (error) {
     console.error(error);
