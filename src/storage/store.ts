@@ -25,6 +25,15 @@ export function complete(word: string, rows: Row[]) {
 export function rowsFor(word: string) {
   return db.query<Row, [string]>("SELECT * FROM domains WHERE palabra = ? ORDER BY rowid").all(word);
 }
+db.transaction(() => {
+  const exists = db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_done'").get();
+  if (exists) return;
+  db.exec("CREATE TABLE sync_done (word TEXT PRIMARY KEY)");
+  const insert = db.query("INSERT INTO sync_done VALUES (?)");
+  for (const { word } of db.query<{ word: string }, []>("SELECT word FROM sync_words").all()) {
+    if (complete(word, rowsFor(word))) insert.run(word);
+  }
+}).immediate();
 export const save = db.transaction((word: string, rows: Row[], refresh = false) => {
   const existing = rowsFor(word);
   if (!refresh && complete(word, existing)) return false;

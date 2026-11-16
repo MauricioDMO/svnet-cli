@@ -61,6 +61,9 @@ Solo puede ejecutarse una sincronización a la vez; si ya está activa, `start`
 muestra su progreso sin iniciar otra. `svnet sync stop` pausa la sincronización
 y `svnet sync start` la reanuda con la lista guardada, incluso si el archivo
 original cambió o ya no existe. Si falla o se interrumpe, `start` también continúa.
+Una vez finalizada, `start` inicia una nueva consulta y actualiza los resultados
+existentes. `svnet sync test 10` consulta una muestra aleatoria de 10 palabras
+distintas de la lista incluida; se puede pausar y reanudar igual que cualquier otra.
 `svnet sync cancel` cancela la sincronización; los resultados guardados se conservan.
 La consulta en curso termina antes de que el proceso se detenga.
 `svnet sync status` y `svnet sync progress` muestran el archivo en `source`,

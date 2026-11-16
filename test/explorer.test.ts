@@ -33,15 +33,33 @@ test("importación, exclusión de sincronización y API del explorador", async (
     server = Bun.spawn([process.execPath, cli, "serve"], { env, stdout: "pipe", stderr: "pipe" });
     const reader = server.stdout!.getReader();
     const line = new TextDecoder().decode((await reader.read()).value);
-    const base = line.match(/http:\/\/\S+/)?.[0];
-    expect(base).toMatch(/^http:\/\/localhost:\d+\/$/);
+    const opened = line.match(/http:\/\/\S+/)?.[0];
+    expect(opened).toMatch(/^http:\/\/localhost:\d+\/$/);
     if (process.platform === "linux") {
       for (let i = 0; i < 100 && !existsSync(join(dir, "opened")); i++) await Bun.sleep(10);
-      expect(readFileSync(join(dir, "opened"), "utf8")).toBe(base);
+      expect(readFileSync(join(dir, "opened"), "utf8")).toBe(opened);
     }
+    const base = opened!.replace("localhost", "127.0.0.1");
     const page = await fetch(base!);
     expect(page.headers.get("content-type")).toContain("text/html");
     expect(await page.text()).toContain("<h1>Explora .sv</h1>");
+    const seedSync = new Database(join(dir, "dominios.sqlite"));
+    seedSync.query("INSERT INTO sync_list VALUES (1, 'prueba')").run();
+    seedSync.query("INSERT INTO sync_words VALUES ('prueba1', 0), ('prueba2', 1)").run();
+    seedSync.query("UPDATE sync SET state='running', pid=?, word='prueba1' WHERE id=1").run(process.pid);
+    const socket = new WebSocket(`${base!.replace("http:", "ws:")}api/sync`, { headers: { origin: new URL(base!).origin } });
+    const nextMessage = () => new Promise<any>((resolve, reject) => {
+      socket.addEventListener("message", event => resolve(JSON.parse(String(event.data))), { once: true });
+      socket.addEventListener("error", reject, { once: true });
+    });
+    expect(await nextMessage()).toMatchObject({ running: true, word: "prueba1", completed: 0, total: 2 });
+    const updated = nextMessage();
+    seedSync.query("INSERT INTO domains VALUES ('prueba1', 'prueba1', 'reserved', NULL, NULL)").run();
+    seedSync.query("INSERT INTO sync_done VALUES ('prueba1')").run();
+    seedSync.query("UPDATE sync SET word='prueba2' WHERE id=1").run();
+    expect(await updated).toMatchObject({ running: true, word: "prueba2", completed: 1, total: 2 });
+    socket.close();
+    seedSync.close();
     const result = await (await fetch(`${base}api/dominios?q=hola`)).json();
     expect(result.results[0].palabra).toBe("hola");
     expect(result.results[0].sv).toBe("registered");
@@ -77,13 +95,27 @@ test("importación, exclusión de sincronización y API del explorador", async (
 
 test("sync acepta una lista propia y solicita confirmación para la incluida", async () => {
   const dir = mkdtempSync(join(tmpdir(), "svnet-list-"));
+  writeFileSync(join(dir, "bunfig.toml"), 'preload = ["./mock.ts"]\n');
+  writeFileSync(join(dir, "mock.ts"), `globalThis.fetch = async (_, init) => {
+    await Bun.sleep(30);
+    const word = init.body.get("nombre");
+    return new Response('<div class="col-12"><strong>' + word + '.sv</strong><button>Disponible</button></div>');
+  };`);
   const env = { ...process.env, SVNET_DATA_DIR: dir };
   const cli = join(import.meta.dir, "../bin/svnet.ts");
   const run = async (args: string[], input = "") => {
-    const proc = Bun.spawn([process.execPath, cli, ...args], { env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn([process.execPath, cli, ...args], { cwd: dir, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
     proc.stdin.write(input);
     proc.stdin.end();
     return { code: await proc.exited, out: await new Response(proc.stdout).text(), err: await new Response(proc.stderr).text() };
+  };
+  const waitForStop = async () => {
+    for (let i = 0; i < 200; i++) {
+      const state = JSON.parse((await run(["sync", "status"])).out);
+      if (!state.pid) return state;
+      await Bun.sleep(20);
+    }
+    throw new Error("La sincronización no terminó");
   };
   try {
     const cancelled = await run(["sync", "start"], "n\n");
@@ -103,7 +135,13 @@ test("sync acepta una lista propia y solicita confirmación para la incluida", a
     writeFileSync(file, "HOLA\nmundo\nhola\n");
     const result = await run(["sync", "start", file]);
     expect(result.code).toBe(0);
-    expect(JSON.parse(result.out)).toMatchObject({ source: file, total: 2, completed: 2 });
+    expect(JSON.parse(result.out)).toMatchObject({ source: file, total: 2 });
+    expect(await waitForStop()).toMatchObject({ state: "completed", completed: 2 });
+    const refreshed = new Database(join(dir, "dominios.sqlite"));
+    expect(refreshed.query("SELECT dominio, estado FROM domains WHERE palabra='hola' AND dominio='hola.sv'").get()).toEqual({ dominio: "hola.sv", estado: "available" });
+    refreshed.close();
+    expect(JSON.parse((await run(["sync", "start", file])).out)).toMatchObject({ source: file, total: 2, completed: 0 });
+    expect(await waitForStop()).toMatchObject({ state: "completed", completed: 2 });
     writeFileSync(file, "modificado\n");
     expect(JSON.parse((await run(["sync", "progress"])).out)).toMatchObject({ source: file, total: 2, completed: 2 });
 
@@ -111,12 +149,47 @@ test("sync acepta una lista propia y solicita confirmación para la incluida", a
     expect((await run(["sync", "start", file])).err).toContain("Palabra inválida");
     const confirmed = await run(["sync", "start"], "s\n");
     expect(confirmed.code).toBe(0);
-    expect(JSON.parse(confirmed.out)).toMatchObject({ source: "lista incluida", total: 4859, completed: 4859 });
-    expect(JSON.parse((await run(["sync", "status"])).out).state).toBe("completed");
+    expect(JSON.parse(confirmed.out)).toMatchObject({ source: "lista incluida", total: 4859 });
+    await run(["sync", "cancel"]);
+    await waitForStop();
+    const sample = await run(["sync", "test", "3"]);
+    expect(sample.code).toBe(0);
+    expect(JSON.parse(sample.out)).toMatchObject({ source: "muestra aleatoria (3)", total: 3 });
+    expect(await waitForStop()).toMatchObject({ state: "completed", completed: 3 });
+    const sampled = new Database(join(dir, "dominios.sqlite"));
+    const words = sampled.query<{ word: string }, []>("SELECT word FROM sync_words").all().map(row => row.word);
+    const included = new Set(readFileSync(join(import.meta.dir, "../src/sync/es-5000.txt"), "utf8").trim().split(/\r?\n/));
+    expect(new Set(words).size).toBe(3);
+    expect(words.every(word => included.has(word))).toBe(true);
+    sampled.close();
+    for (const count of ["0", "-1", "1.5", "4860", "foo"]) expect((await run(["sync", "test", count])).code).toBe(1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 15000);
+
+test("migra el progreso de una sincronización anterior sin perder resultados", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "svnet-migrate-"));
+  try {
+    const db = new Database(join(dir, "dominios.sqlite"));
+    db.exec(`CREATE TABLE domains (palabra TEXT NOT NULL, dominio TEXT NOT NULL, estado TEXT NOT NULL, id INTEGER, indexado_en TEXT);
+      CREATE TABLE sync (id INTEGER PRIMARY KEY, pid INTEGER, state TEXT, word TEXT, error TEXT, started TEXT, finished TEXT);
+      CREATE TABLE sync_words (word TEXT PRIMARY KEY, position INTEGER NOT NULL);
+      CREATE TABLE sync_list (id INTEGER PRIMARY KEY, source TEXT NOT NULL);
+      INSERT INTO sync (id, state) VALUES (1, 'paused');
+      INSERT INTO sync_list VALUES (1, 'anterior');
+      INSERT INTO sync_words VALUES ('hola', 0), ('mundo', 1);
+      INSERT INTO domains VALUES ('hola', 'hola', 'reserved', NULL, NULL);`);
+    db.close();
+    const cli = join(import.meta.dir, "../bin/svnet.ts");
+    const proc = Bun.spawn([process.execPath, cli, "sync", "status"], { env: { ...process.env, SVNET_DATA_DIR: dir }, stdout: "pipe" });
+    const result = JSON.parse(await new Response(proc.stdout).text());
+    expect(await proc.exited).toBe(0);
+    expect(result).toMatchObject({ state: "paused", source: "anterior", completed: 1, total: 2 });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("sync pausa, reanuda la lista guardada y cancela sin borrar resultados", async () => {
   const dir = mkdtempSync(join(tmpdir(), "svnet-control-"));
@@ -135,6 +208,7 @@ test("sync pausa, reanuda la lista guardada y cancela sin borrar resultados", as
     db.query("INSERT INTO sync_list VALUES (1, ?)").run("/lista/original.txt");
     db.query("INSERT INTO sync_words VALUES ('hola', 0)").run();
     db.query("INSERT INTO domains VALUES ('hola', 'hola', 'reserved', NULL, NULL)").run();
+    db.query("INSERT INTO sync_done VALUES ('hola')").run();
     db.query("UPDATE sync SET state='running', pid=?, word='hola' WHERE id=1").run(process.pid);
     expect(await run("sync", "stop")).toMatchObject({ state: "paused", source: "/lista/original.txt", word: "hola" });
     expect(await run("sync", "start")).toMatchObject({ state: "running", source: "/lista/original.txt" });

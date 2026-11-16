@@ -47,10 +47,14 @@ try {
         console.log(JSON.stringify(await start(positionals[2]), null, 2));
       }
     }
+    else if (action === "test" && positionals.length === 3) {
+      if (!/^[1-9]\d*$/.test(positionals[2])) throw new Error("La muestra debe ser un entero positivo.");
+      console.log(JSON.stringify(await start(undefined, Number(positionals[2])), null, 2));
+    }
     else if (["status", "progress"].includes(action) && positionals.length === 2) console.log(JSON.stringify(status(), null, 2));
     else if (["stop", "cancel"].includes(action) && positionals.length === 2) console.log(JSON.stringify(control(action as "stop" | "cancel"), null, 2));
     else if (action === "import" && positionals.length === 3) console.log(JSON.stringify(importCsv(positionals[2]), null, 2));
-    else throw new Error("Usa svnet sync start [archivo.txt], stop, cancel, status, progress o import <archivo.csv>.");
+    else throw new Error("Usa svnet sync start [archivo.txt], test <cantidad>, stop, cancel, status, progress o import <archivo.csv>.");
   } else {
     const shortcut = values.search ? "search" : values.whois ? "whois" : null;
     const [command, value] = shortcut ? [shortcut, positionals[0]] : positionals;

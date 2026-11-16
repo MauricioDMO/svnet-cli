@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { whois } from "../index";
 import { collect } from "./collector";
 import { db, extensions, groupRows, type Row } from "../storage/store";
+import { status } from "../sync";
 
 const domainPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:(?:com|org|edu|gob)\.)?sv$/;
 async function handleConsult(request: Request, url: URL) {
@@ -66,7 +67,41 @@ async function handle(request: Request) {
 export function serve() {
   for (let port = 3000; port <= 65535; port++) {
     try {
-      const server = Bun.serve({ hostname: "localhost", port, fetch: handle });
+      const clients = new Set<import("bun").ServerWebSocket<unknown>>();
+      let timer: ReturnType<typeof setInterval> | undefined;
+      let previous = "";
+      const server = Bun.serve({
+        hostname: "localhost", port,
+        fetch(request, server) {
+          const url = new URL(request.url);
+          if (url.pathname === "/api/sync") {
+            if (request.headers.get("origin") !== url.origin) return new Response("No autorizado", { status: 403 });
+            if (server.upgrade(request)) return;
+            return new Response("Se requiere WebSocket", { status: 400 });
+          }
+          return handle(request);
+        },
+        websocket: {
+          open(ws) {
+            clients.add(ws);
+            ws.send(JSON.stringify(status()));
+            if (!timer) timer = setInterval(() => {
+              try {
+                const current = JSON.stringify(status());
+                if (current !== previous) {
+                  previous = current;
+                  for (const client of clients) client.send(current);
+                }
+              } catch (error) { console.error(error); }
+            }, 1000);
+          },
+          message() {},
+          close(ws) {
+            clients.delete(ws);
+            if (!clients.size) { clearInterval(timer); timer = undefined; previous = ""; }
+          },
+        },
+      });
       const url = `http://localhost:${port}/`;
       console.log(`Explorador disponible en ${url}`);
       const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "rundll32" : "xdg-open";

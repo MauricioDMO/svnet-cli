@@ -7,6 +7,7 @@ Uso:
   svnet -w <dominio|id>          [--json] [--timeout <ms>]
   svnet serve                    Iniciar el explorador local
   svnet sync start [archivo.txt] Iniciar o reanudar consulta masiva
+  svnet sync test <cantidad>     Consultar muestra aleatoria de la lista incluida
   svnet sync stop                Pausar sincronización
   svnet sync cancel              Cancelar sincronización
   svnet sync status|progress     Consultar progreso

@@ -24,6 +24,11 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 .detail td{background:#f3f7fc;padding:16px 20px}.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0;overflow-wrap:anywhere}.detail dt{font-weight:700;color:#506982}.detail dd{margin:0;white-space:pre-wrap}.detail-error{color:#a63737}
 .group-detail>td{background:#f3f7fc;padding:8px 16px}.group-detail table{background:#fff;border:1px solid var(--line)}.mixed{background:#fff0cf;color:#835900}
 .domain a{color:#195bb8;text-decoration:underline;text-underline-offset:3px}.domain a:focus-visible{outline:3px solid #76a9ed;outline-offset:2px}
+.sync{margin:16px 0;padding:15px 18px 17px;border:1px solid #cdddec;border-radius:12px;background:#fff;box-shadow:0 3px 14px #17345308}
+.sync-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px}.sync-current{display:flex;align-items:center;gap:10px;min-width:0}
+.sync-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#238975;box-shadow:0 0 0 4px #e4f5ef}.sync-label{flex:none;font-size:.8rem;font-weight:700;color:#34516e}.sync-word{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#195bb8;font:600 .85rem/1.5 ui-monospace,monospace}
+.sync-count{white-space:nowrap;font-size:.78rem;font-weight:650;color:#617990;font-variant-numeric:tabular-nums}.sync progress{display:block;width:100%;height:6px;margin-top:13px;appearance:none;border:0;border-radius:10px;background:#e9f0f7;overflow:hidden}.sync progress::-webkit-progress-bar{background:#e9f0f7;border-radius:10px}.sync progress::-webkit-progress-value{background:#268975;border-radius:10px}.sync progress::-moz-progress-bar{background:#268975;border-radius:10px}
+@media(max-width:500px){.sync{padding:14px}.sync-row{gap:8px}.sync-current{gap:8px}.sync-label{font-size:.75rem}.sync-word,.sync-count{font-size:.75rem}}
 .whois-space{display:inline-block;width:30px;height:30px;margin-right:8px;vertical-align:middle}.whois-button{margin-right:8px;border-color:transparent;background:transparent}
 .table .icon-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;vertical-align:middle}.icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.expand-button{margin-right:8px;border-color:transparent;background:transparent}.expand-button svg{transition:transform .15s}.expand-button[aria-expanded="true"] svg{transform:rotate(90deg)}.actions{text-align:right;white-space:nowrap}.refreshing svg{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(-360deg)}}@media(prefers-reduced-motion:reduce){.expand-button svg{transition:none}.refreshing svg{animation:none}}
 </style>
@@ -31,6 +36,13 @@ tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color
 <body>
 <header><p>Directorio de dominios</p><h1>Explora .sv</h1><span>Busca y filtra las consultas realizadas a SVNet.</span></header>
 <main>
+<section id="sync" class="sync" aria-label="Progreso de sincronización" hidden>
+<div class="sync-row" role="status">
+<div class="sync-current"><span class="sync-dot" aria-hidden="true"></span><span class="sync-label">Sincronizando</span><span id="sync-word" class="sync-word"></span></div>
+<span id="sync-count" class="sync-count"></span>
+</div>
+<progress id="sync-progress" aria-label="Progreso de sincronización"></progress>
+</section>
 <div class="controls">
 <label>Buscar dominio<input id="search" type="search" placeholder="Ej. hola" autocomplete="off" autofocus></label>
 <button id="consult" type="button" disabled>Consultar en SVNet</button>
@@ -210,6 +222,24 @@ document.addEventListener('keydown', event => {
 for (const id of ['status','limit']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
 $('prev').onclick = () => { page--; load(); };
 $('next').onclick = () => { page++; load(); };
+function connectSync() {
+  const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/sync`);
+  socket.onmessage = event => {
+    const sync = JSON.parse(event.data);
+    $('sync').hidden = !sync.running;
+    if (!sync.running) return;
+    $('sync-word').textContent = sync.word || '…';
+    $('sync-word').title = sync.word || '';
+    $('sync-count').textContent = `${sync.completed} / ${sync.total}`;
+    $('sync-progress').max = sync.total || 1;
+    $('sync-progress').value = sync.completed;
+  };
+  socket.onclose = () => {
+    $('sync').hidden = true;
+    setTimeout(connectSync, 2000);
+  };
+}
+connectSync();
 load();
 </script>
 </body>
