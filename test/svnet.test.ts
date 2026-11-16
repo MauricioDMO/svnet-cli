@@ -22,6 +22,20 @@ const WHOIS_HTML = `<div><strong>mi.sv</strong><span>Registrado</span><table>
   <tr><td>Fecha de Baja:</td><td>27-10-2027</td></tr>
   </table></div>`;
 
+test("conserva la reserva de la palabra junto con registros BSA", async () => {
+  const html = `<div class="alert alert-warning">Los nombres de dominio: <strong><br/>cat.com.sv<br/>cat.sv<br/>cat.org.sv<br/></strong> Se encuentran <h6>REGISTRADOS BSA</h6></div>
+    <div class="alert alert-danger">Este nombre de dominio: <strong>cat</strong> es reservado por SVNet, no se puede registrar</div>`;
+  const options = { fetch: async () => new Response(html) };
+  expect(await search("cat", options)).toEqual([
+    { domain: "cat.com.sv", status: "registered", id: null },
+    { domain: "cat.sv", status: "registered", id: null },
+    { domain: "cat.org.sv", status: "registered", id: null },
+    { domain: "cat", status: "reserved", id: null },
+  ]);
+  expect(await whois("cat.sv", options)).toEqual({ domain: "cat.sv", status: "registered", id: null });
+  await expect(search("cat.edu.sv", options)).rejects.toThrow("no devolvió información");
+});
+
 test("reconoce registros BSA sin ID en la alerta de búsqueda", async () => {
   const html = `<div class="alert alert-warning">Los nombres de dominio: <strong><br/>rabo.com.sv<br/>rabo.sv<br/>rabo.org.sv<br/></strong> Se encuentran <h6>REGISTRADOS BSA</h6></div>
     <div class="col-12"><strong>rabo.edu.sv</strong><button>Disponible</button></div>

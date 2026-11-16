@@ -12,7 +12,9 @@ export function output(result: Domain[] | Domain | WhoisRecord, json?: boolean) 
       }
       if (process.stdout.isTTY) {
         const available = result.filter(({ status }) => status === "available").length;
-        console.log(`\n${color(`Dominios: ${result.length} · Disponibles: ${available} · Registrados: ${result.length - available}`, 2)}`);
+        const registeredCount = result.filter(({ status }) => status === "registered").length;
+        const reserved = result.some(({ status }) => status === "reserved");
+        console.log(`\n${color(`Dominios: ${available + registeredCount} · Disponibles: ${available} · Registrados: ${registeredCount}${reserved ? " · Palabra reservada" : ""}`, 2)}`);
         const registered = result.find(({ status, id }) => status === "registered" && id !== null);
         if (registered) console.log(color(`Ver detalles: svnet whois ${registered.domain}`, 2));
       }

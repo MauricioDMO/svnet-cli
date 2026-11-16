@@ -1,7 +1,7 @@
 let noColor = "NO_COLOR" in process.env || process.env.TERM === "dumb";
 export const color = (text: string | number, code: string | number, stream: NodeJS.WriteStream = process.stdout) =>
   stream.isTTY && !noColor ? `\x1b[${code}m${text}\x1b[0m` : String(text);
-export const statusLabel = (status: string) => color(status === "available" ? "Disponible" : "Registrado", status === "available" ? 32 : 33);
+export const statusLabel = (status: string) => color(status === "available" ? "Disponible" : status === "reserved" ? "Reservado" : "Registrado", status === "available" ? 32 : 33);
 
 export function progress(message: string, quiet?: boolean) {
   if (quiet || !process.stdout.isTTY || !process.stderr.isTTY || process.env.TERM === "dumb") return () => {};

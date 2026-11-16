@@ -148,7 +148,8 @@ async function load() {
       button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
       button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver dominios de ${item.palabra}`);
       button.onclick = () => showDomains(button, tr, item); domain.append(button, document.createTextNode(item.palabra));
-      tr.insertCell().append(badge(item.estado, true));
+      const state = tr.insertCell(); state.append(badge(item.estado, true));
+      if (item.reservado) state.append(' ', badge('reserved'));
       tr.insertCell().append(badge(item.sv));
       const indexed = tr.insertCell();
       if (item.indexado_en) {

@@ -4,6 +4,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 
+test("guarda y muestra la reserva junto a los estados individuales de cat", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "svnet-mixed-"));
+  try {
+    const html = `<div class="alert alert-warning">Los nombres de dominio: <strong><br/>cat.com.sv<br/>cat.sv<br/>cat.org.sv<br/></strong> Se encuentran <h6>REGISTRADOS BSA</h6></div>
+      <div class="alert alert-danger">Este nombre de dominio: <strong>cat</strong> es reservado por SVNet, no se puede registrar</div>`;
+    const script = `
+      globalThis.fetch = async () => new Response(${JSON.stringify(html)});
+      const { collect } = await import(${JSON.stringify(new URL("../src/explorer/collector.ts", import.meta.url).href)});
+      const { rowsFor, groupRows } = await import(${JSON.stringify(new URL("../src/storage/store.ts", import.meta.url).href)});
+      const result = await collect("cat", true);
+      console.log(JSON.stringify({ result, rows: rowsFor("cat"), group: groupRows(rowsFor("cat"))[0] }));
+    `;
+    const proc = Bun.spawn([process.execPath, "-e", script], { env: { ...process.env, SVNET_DATA_DIR: dir }, stdout: "pipe", stderr: "pipe" });
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    expect({ code, err }).toEqual({ code: 0, err: "" });
+    const data = JSON.parse(out);
+    expect(data.result.reserved).toBe(true);
+    expect(data.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dominio: "cat", estado: "reserved", id: null }),
+      expect.objectContaining({ dominio: "cat.sv", estado: "registered", id: null }),
+      expect.objectContaining({ dominio: "cat.edu.sv", estado: "unknown", id: null }),
+    ]));
+    expect(data.group).toMatchObject({ reservado: true, sv: "registered", domains: expect.arrayContaining([
+      { dominio: "cat.sv", estado: "registered" },
+      { dominio: "cat.edu.sv", estado: "reserved" },
+      { dominio: "cat.gob.sv", estado: "reserved" },
+    ]) });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("importación, exclusión de sincronización y API del explorador", async () => {
   const dir = mkdtempSync(join(tmpdir(), "svnet-test-"));
   const env = { ...process.env, SVNET_DATA_DIR: dir, PATH: `${dir}:${process.env.PATH}` };

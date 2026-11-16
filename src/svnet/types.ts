@@ -5,6 +5,7 @@ export interface RequestOptions {
 
 export type Domain =
   | { domain: string; status: "available"; id: null }
+  | { domain: string; status: "reserved"; id: null }
   | { domain: string; status: "registered"; id: number | null };
 
 export type WhoisRecord = Extract<Domain, { status: "registered" }> & {

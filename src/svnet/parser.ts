@@ -30,7 +30,8 @@ export function parseSearch(html: string, name: string, base: string): Domain[] 
     .transform(html);
 
   const bsa = /\bregistrados\s+bsa\b/i.test(clean(warning)) ? clean(bsaDomains).split(/\s+/).filter(Boolean) : [];
-  if (!entries.length && !bsa.length && clean(alert).toLowerCase() === `este nombre de dominio: ${base} es reservado por svnet, no se puede registrar`) {
+  const reserved = clean(alert).toLowerCase() === `este nombre de dominio: ${base} es reservado por svnet, no se puede registrar`;
+  if (!entries.length && !bsa.length && reserved) {
     throw new Error(`${base} es reservado por SVNet y no se puede registrar.`);
   }
   if (!entries.length && !bsa.length) throw new Error("Respuesta de búsqueda no reconocida de SVNet.");
@@ -52,6 +53,7 @@ export function parseSearch(html: string, name: string, base: string): Domain[] 
     }
     results.push({ domain, status: "registered", id: null });
   }
+  if (reserved && !name.includes(".")) results.push({ domain: base, status: "reserved", id: null });
   const filtered = name.includes(".") ? results.filter((result) => result.domain === name) : results;
   if (!filtered.length) throw new Error(`SVNet no devolvió información para ${name}.`);
   return filtered;

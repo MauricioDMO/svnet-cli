@@ -51,12 +51,12 @@ export function groupRows(rows: Row[]) {
     const domains = extensions.map(extension => {
       const dominio = palabra + extension;
       const states = new Set(entries.filter(row => row.dominio === dominio).map(row => row.estado));
-      return { dominio, estado: reserved ? "reserved" : states.size === 0 ? "unknown" : states.size > 1 ? "mixed" : [...states][0] };
+      return { dominio, estado: reserved && (states.size === 0 || (states.size === 1 && states.has("unknown"))) ? "reserved" : states.size === 0 ? "unknown" : states.size > 1 ? "mixed" : [...states][0] };
     });
     const states = new Set(domains.map(row => row.estado));
-    const estado = reserved ? "unavailable" : states.has("mixed") || (states.has("available") && states.has("registered")) ? "mixed" :
+    const estado = states.has("mixed") || (states.has("available") && (reserved || states.has("registered"))) ? "mixed" : reserved ? "unavailable" :
       states.has("unknown") || states.size !== 1 ? "unknown" : states.has("available") ? "available" : "unavailable";
     const indexado_en = entries.every(row => row.indexado_en) ? entries.map(row => row.indexado_en!).sort().at(-1) : null;
-    return { palabra, estado, sv: domains[4].estado, indexado_en, domains };
+    return { palabra, estado, reservado: reserved, sv: domains[4].estado, indexado_en, domains };
   });
 }
