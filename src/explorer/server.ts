@@ -31,11 +31,15 @@ function handleDomains(url: URL) {
         (state && !["available", "unavailable", "mixed", "unknown"].includes(state)) || (extension && !extensions.includes(extension))) {
         return Response.json({ error: "Filtros o página inválidos." }, { status: 400 });
       }
-      const rows = db.query<Row, []>("SELECT * FROM domains ORDER BY rowid").all();
+      const word = query.replace(/\.(?:(?:com|org|edu|gob)\.)?sv$/, "");
+      const rows = db.query<Row, [string]>(`SELECT * FROM domains ORDER BY
+        CASE WHEN ?1 = '' THEN 0 WHEN palabra = ?1 THEN 100
+             WHEN instr(palabra, ?1) = 1 THEN 70 ELSE 30 END DESC,
+        CASE WHEN ?1 <> '' THEN length(palabra) END,
+        CASE WHEN ?1 <> '' THEN palabra END, rowid`).all(word);
       const groups = groupRows(rows);
       const filtered = groups.filter(group => (!query || group.palabra.includes(query) || group.domains.some(row => row.dominio.includes(query))) &&
         (!state || group.estado === state) && (!extension || group.domains.some(row => row.dominio === group.palabra + extension && row.estado !== "unknown")));
-      const word = query.replace(/\.(?:(?:com|org|edu|gob)\.)?sv$/, "");
       const pages = Math.max(1, Math.ceil(filtered.length / 10));
       const page = Math.min(Number(requested), pages);
       return Response.json({ results: filtered.slice((page - 1) * 10, page * 10), total: filtered.length, count: groups.length, page, pages, indexed: rows.some(row => row.palabra === word) });

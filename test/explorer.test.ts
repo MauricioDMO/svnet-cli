@@ -40,6 +40,19 @@ test("importación, exclusión de sincronización y API del explorador", async (
     const result = await (await fetch(`${base}api/dominios?q=hola`)).json();
     expect(result.results[0].palabra).toBe("hola");
     expect(result.results[0].sv).toBe("registered");
+    const seed = new Database(join(dir, "dominios.sqlite"));
+    const insert = seed.query("INSERT INTO domains VALUES (?, ?, 'registered', NULL, NULL)");
+    for (const word of ["fatal", "talvez", "talo", "tala", "tal", ...Array.from({ length: 8 }, (_, i) => `talx${i}`)]) {
+      insert.run(word, `${word}.sv`);
+    }
+    seed.close();
+    const ranked = await (await fetch(`${base}api/dominios?q=tal`)).json();
+    expect(ranked.results.map((item: { palabra: string }) => item.palabra)).toEqual(["tal", "tala", "talo", "talx0", "talx1", "talx2", "talx3", "talx4", "talx5", "talx6"]);
+    const secondPage = await (await fetch(`${base}api/dominios?q=tal&page=2`)).json();
+    expect(secondPage.results.map((item: { palabra: string }) => item.palabra)).toEqual(["talx7", "talvez", "fatal"]);
+    expect((await (await fetch(`${base}api/dominios?q=tal.sv`)).json()).results[0].palabra).toBe("tal");
+    expect((await (await fetch(`${base}api/dominios?q=%25`)).json()).total).toBe(0);
+    expect((await (await fetch(`${base}api/dominios?q=_`)).json()).total).toBe(0);
     expect((await fetch(`${base}api/dominios?page=-1`)).status).toBe(400);
     expect((await fetch(`${base}api/consultar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status).toBe(403);
   } finally {
