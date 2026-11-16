@@ -243,7 +243,12 @@ $('search').addEventListener('keydown', event => {
   }
 });
 document.addEventListener('keydown', event => {
-  if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing ||
+  if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
+  if (event.key === '.' && !event.shiftKey && !event.repeat &&
+      (event.target === $('search') && !$('search').value || !event.target.isContentEditable && !['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName))) {
+    event.preventDefault(); window.open('https://svnet.sv', '_blank', 'noopener,noreferrer'); return;
+  }
+  if (
       event.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName)) return;
   if (event.key === '/') { event.preventDefault(); $('search').focus(); }
   else if (!event.shiftKey && !event.repeat && ['ArrowLeft','ArrowRight'].includes(event.key)) {
