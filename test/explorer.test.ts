@@ -91,3 +91,33 @@ test("sync acepta una lista propia y solicita confirmación para la incluida", a
     rmSync(dir, { recursive: true, force: true });
   }
 }, 15000);
+
+test("sync pausa, reanuda la lista guardada y cancela sin borrar resultados", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "svnet-control-"));
+  const env = { ...process.env, SVNET_DATA_DIR: dir };
+  const cli = join(import.meta.dir, "../bin/svnet.ts");
+  const run = async (...args: string[]) => {
+    const proc = Bun.spawn([process.execPath, cli, ...args], { env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    expect(code).toBe(0);
+    expect(err).toBe("");
+    return JSON.parse(out);
+  };
+  try {
+    await run("sync", "status");
+    const db = new Database(join(dir, "dominios.sqlite"));
+    db.query("INSERT INTO sync_list VALUES (1, ?)").run("/lista/original.txt");
+    db.query("INSERT INTO sync_words VALUES ('hola', 0)").run();
+    db.query("INSERT INTO domains VALUES ('hola', 'hola', 'reserved', NULL, NULL)").run();
+    db.query("UPDATE sync SET state='running', pid=?, word='hola' WHERE id=1").run(process.pid);
+    expect(await run("sync", "stop")).toMatchObject({ state: "paused", source: "/lista/original.txt", word: "hola" });
+    expect(await run("sync", "start")).toMatchObject({ state: "running", source: "/lista/original.txt" });
+    expect(await run("sync", "cancel")).toMatchObject({ state: "cancelled", completed: 1 });
+    db.query("UPDATE sync SET state='paused', pid=NULL WHERE id=1").run();
+    expect(await run("sync", "start")).toMatchObject({ source: "/lista/original.txt", total: 1, completed: 1 });
+    expect(await run("sync", "status")).toMatchObject({ state: "completed", source: "/lista/original.txt" });
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 15000);

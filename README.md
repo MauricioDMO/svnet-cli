@@ -58,10 +58,13 @@ Se mantiene ejecutándose hasta pulsar Ctrl+C. Solo acepta conexiones locales.
 del archivo (una por línea). `svnet sync start` pregunta antes de usar la lista
 española incluida.
 Solo puede ejecutarse una sincronización a la vez; si ya está activa, `start`
-muestra su progreso sin iniciar otra. Si falla o se interrumpe,
-vuelve a ejecutar el comando para continuar. `svnet sync status` y
-`svnet sync progress` muestran estado, lista, palabra actual y conteos en JSON.
-Para continuar con una lista propia, vuelve a pasar el mismo archivo.
+muestra su progreso sin iniciar otra. `svnet sync stop` pausa la sincronización
+y `svnet sync start` la reanuda con la lista guardada, incluso si el archivo
+original cambió o ya no existe. Si falla o se interrumpe, `start` también continúa.
+`svnet sync cancel` cancela la sincronización; los resultados guardados se conservan.
+La consulta en curso termina antes de que el proceso se detenga.
+`svnet sync status` y `svnet sync progress` muestran el archivo en `source`,
+la palabra actual y los conteos en JSON.
 
 Los resultados se guardan en `~/.local/share/svnet/dominios.sqlite` (o en
 `$XDG_DATA_HOME/svnet`). Para elegir otra carpeta, usa `SVNET_DATA_DIR`.

@@ -28,7 +28,7 @@ export function status() {
 }
 const claim = db.transaction((words: string[], source: string) => {
   const current = db.query<Sync, []>("SELECT * FROM sync WHERE id=1").get()!;
-  if (current.state === "running" && alive(current.pid)) return false;
+  if (alive(current.pid)) return false;
   db.exec("DELETE FROM sync_words");
   const insert = db.query("INSERT INTO sync_words (word, position) VALUES (?, ?)");
   words.forEach((word, index) => insert.run(word, index));
@@ -46,19 +46,49 @@ export async function worker() {
   try {
     for (const word of words) {
       if (complete(word, rowsFor(word))) continue;
-      db.query("UPDATE sync SET word=? WHERE id=1").run(word);
+      const proceed = db.transaction(() => {
+        const current = db.query<Sync, []>("SELECT * FROM sync WHERE id=1").get()!;
+        if (current.state !== "running") {
+          db.query("UPDATE sync SET pid=NULL WHERE id=1 AND pid=?").run(process.pid);
+          return false;
+        }
+        db.query("UPDATE sync SET word=? WHERE id=1 AND pid=?").run(word, process.pid);
+        return true;
+      }).immediate();
+      if (!proceed) return;
       await collect(word);
     }
-    db.query("UPDATE sync SET state='completed', finished=? WHERE id=1").run(new Date().toISOString());
+    db.query("UPDATE sync SET state=CASE WHEN state='running' THEN 'completed' ELSE state END, finished=CASE WHEN state='running' THEN ? ELSE finished END, pid=NULL, word=NULL WHERE id=1 AND pid=?").run(new Date().toISOString(), process.pid);
   } catch (error) {
-    db.query("UPDATE sync SET state='error', error=?, finished=? WHERE id=1").run(error instanceof Error ? error.message : String(error), new Date().toISOString());
+    db.query("UPDATE sync SET state=CASE WHEN state='running' THEN 'error' ELSE state END, error=CASE WHEN state='running' THEN ? ELSE error END, finished=CASE WHEN state='running' THEN ? ELSE finished END, pid=NULL WHERE id=1 AND pid=?").run(error instanceof Error ? error.message : String(error), new Date().toISOString(), process.pid);
   }
 }
+export function control(action: "stop" | "cancel") {
+  db.transaction(() => {
+    const current = db.query<Sync, []>("SELECT * FROM sync WHERE id=1").get()!;
+    if (action === "stop" && current.state === "running") {
+      db.query("UPDATE sync SET state='paused' WHERE id=1").run();
+    } else if (action === "cancel" && ["running", "paused", "error"].includes(current.state)) {
+      db.query("UPDATE sync SET state='cancelled', finished=? WHERE id=1").run(new Date().toISOString());
+    }
+  }).immediate();
+  return status();
+}
 export async function start(path?: string) {
-  const current = status();
+  let current = status();
   if (current.running) return current;
-  const source = path ? resolve(path) : "lista incluida";
-  const words = path ? parseWords(readFileSync(source, "utf8")) : defaultWords;
+  if (!path && current.state === "paused") {
+    db.transaction(() => {
+      const sync = db.query<Sync, []>("SELECT * FROM sync WHERE id=1").get()!;
+      if (sync.state === "paused" && alive(sync.pid)) db.query("UPDATE sync SET state='running' WHERE id=1").run();
+    }).immediate();
+    current = status();
+    if (current.running) return current;
+  }
+  if (alive(current.pid)) throw new Error("La sincronización anterior está terminando; inténtalo de nuevo.");
+  const resume = !path && ["paused", "interrupted", "error"].includes(current.state);
+  const source = resume ? current.source : path ? resolve(path) : "lista incluida";
+  const words = resume ? db.query<{ word: string }, []>("SELECT word FROM sync_words ORDER BY position").all().map(row => row.word) : path ? parseWords(readFileSync(source, "utf8")) : defaultWords;
   const args = Bun.main.startsWith("/$bunfs/") ? ["sync", "_worker"] : [Bun.main, "sync", "_worker"];
   const child = spawn(process.execPath, args, { detached: true, stdio: ["pipe", "pipe", "ignore"], env: process.env });
   child.stdin!.end(JSON.stringify({ words, source }));

@@ -26,14 +26,14 @@ try {
     const { serve } = await import("../src/explorer/server");
     serve();
   } else if (!values.search && !values.whois && positionals[0] === "sync") {
-    const { start, status, worker, importCsv } = await import("../src/sync");
+    const { start, status, worker, importCsv, control } = await import("../src/sync");
     const action = positionals[1];
     if (action === "_worker" && positionals.length === 2) await worker();
     else if (action === "start" && (positionals.length === 2 || positionals.length === 3)) {
       const current = status();
       if (current.running) console.log(JSON.stringify(current, null, 2));
       else {
-        if (!positionals[2]) {
+        if (!positionals[2] && !["paused", "interrupted", "error"].includes(current.state)) {
           process.stderr.write("¿Usar la lista de palabras incluida? [s/N] ");
           const lines = createInterface({ input: process.stdin });
           let answer = "";
@@ -48,8 +48,9 @@ try {
       }
     }
     else if (["status", "progress"].includes(action) && positionals.length === 2) console.log(JSON.stringify(status(), null, 2));
+    else if (["stop", "cancel"].includes(action) && positionals.length === 2) console.log(JSON.stringify(control(action as "stop" | "cancel"), null, 2));
     else if (action === "import" && positionals.length === 3) console.log(JSON.stringify(importCsv(positionals[2]), null, 2));
-    else throw new Error("Usa svnet sync start [archivo.txt], status, progress o import <archivo.csv>.");
+    else throw new Error("Usa svnet sync start [archivo.txt], stop, cancel, status, progress o import <archivo.csv>.");
   } else {
     const shortcut = values.search ? "search" : values.whois ? "whois" : null;
     const [command, value] = shortcut ? [shortcut, positionals[0]] : positionals;
