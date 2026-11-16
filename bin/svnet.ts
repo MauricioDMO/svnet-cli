@@ -21,6 +21,17 @@ try {
   disableColor(Boolean(values["no-color"] || values.json));
   if (values.help || (positionals.length === 0 && !values.search && !values.whois)) {
     console.log(HELP);
+  } else if (!values.search && !values.whois && positionals[0] === "serve" && positionals.length === 1) {
+    const { serve } = await import("../src/server");
+    serve();
+  } else if (!values.search && !values.whois && positionals[0] === "sync") {
+    const { start, status, worker, importCsv } = await import("../src/sync");
+    const action = positionals[1];
+    if (action === "_worker" && positionals.length === 2) await worker();
+    else if (action === "start" && positionals.length === 2) console.log(JSON.stringify(await start(), null, 2));
+    else if (["status", "progress"].includes(action) && positionals.length === 2) console.log(JSON.stringify(status(), null, 2));
+    else if (action === "import" && positionals.length === 3) console.log(JSON.stringify(importCsv(positionals[2]), null, 2));
+    else throw new Error("Usa svnet sync start|status|progress o svnet sync import <archivo.csv>.");
   } else {
     const shortcut = values.search ? "search" : values.whois ? "whois" : null;
     const [command, value] = shortcut ? [shortcut, positionals[0]] : positionals;

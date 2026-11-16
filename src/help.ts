@@ -5,6 +5,9 @@ Uso:
   svnet whois <dominio|id>      [--json] [--timeout <ms>]
   svnet -s <dominio>            [--json] [--timeout <ms>]
   svnet -w <dominio|id>         [--json] [--timeout <ms>]
+  svnet serve                   Iniciar el explorador local
+  svnet sync start|status|progress
+  svnet sync import <archivo.csv>
 
 Ejemplos:
   svnet search mi
@@ -19,4 +22,3 @@ Opciones:
   -h, --help      Mostrar esta ayuda
 
 WHOIS sin extensión consulta .sv. Un dominio disponible no tiene ficha WHOIS.`;
-

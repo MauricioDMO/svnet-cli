@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Explorador de dominios .sv</title>
+<style>
+:root{color-scheme:light;--ink:#173453;--blue:#195bb8;--pale:#eef5ff;--line:#d6e2ef;--green:#167858}
+*{box-sizing:border-box}body{min-height:calc(100vh + 1px);margin:0;background:#f5f8fc;color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+header{background:#12365d;color:#fff;padding:12px max(24px,calc((100vw - 1100px)/2))}
+header p{margin:0;color:#bad0eb;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase}
+h1{font-size:1.3rem;letter-spacing:-.03em;margin:0}
+header span{color:#d5e4f5;font-size:.8rem}main{max-width:1100px;margin:auto;padding:18px 24px 40px}
+.controls{display:grid;grid-template-columns:2fr auto 1fr 1fr;gap:14px;align-items:end}.controls>button{min-height:48px;white-space:nowrap;background:#195bb8;border-color:#195bb8;color:#fff;font-weight:650}
+label{font-weight:650;font-size:.85rem}input,select{display:block;width:100%;margin-top:6px;border:1px solid #b5c9df;border-radius:8px;padding:12px;background:#fff;color:var(--ink);font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid #76a9ed;outline-offset:2px}
+.summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:16px 0 8px}
+.summary p{margin:0}.upload{font-weight:500;color:var(--blue);cursor:pointer}.upload input{max-width:300px;font-size:.8rem;padding:5px}
+.table{border:1px solid var(--line);border-radius:10px;background:white;overflow:auto}
+table{width:100%;border-collapse:collapse;text-align:left;font-size:.9rem}th{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#627c98;background:var(--pale)}td,th{padding:6px 12px;border-bottom:1px solid #eaf0f6}
+tbody tr:last-child td{border:0}.domain{font-family:ui-monospace,monospace;color:#173e70}.badge{display:inline-block;border-radius:20px;background:#e5f6ee;color:#126447;padding:3px 10px;font-size:.8rem;font-weight:700}.registered,.unavailable,.reserved{background:#fde5e5;color:#a52424}.unknown{background:#edf0f5;color:#4b5a70}
+.pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:18px}button{border:1px solid #b5c9df;background:white;border-radius:7px;padding:8px 14px;color:var(--ink);cursor:pointer}button:disabled{opacity:.4;cursor:default}
+.table button{padding:4px 10px;font-size:.85rem}@media(max-width:650px){.controls{grid-template-columns:1fr}td,th{padding:6px 8px}header{padding:12px 24px}}
+.detail td{background:#f3f7fc;padding:16px 20px}.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0;overflow-wrap:anywhere}.detail dt{font-weight:700;color:#506982}.detail dd{margin:0;white-space:pre-wrap}.detail-error{color:#a63737}
+.group-detail>td{background:#f3f7fc;padding:8px 16px}.group-detail table{background:#fff;border:1px solid var(--line)}.mixed{background:#fff0cf;color:#835900}
+.domain a{color:#195bb8;text-decoration:underline;text-underline-offset:3px}.domain a:focus-visible{outline:3px solid #76a9ed;outline-offset:2px}
+.whois-space{display:inline-block;width:30px;height:30px;margin-right:8px;vertical-align:middle}.whois-button{margin-right:8px;border-color:transparent;background:transparent}
+.table .icon-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;vertical-align:middle}.icon-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.expand-button{margin-right:8px;border-color:transparent;background:transparent}.expand-button svg{transition:transform .15s}.expand-button[aria-expanded="true"] svg{transform:rotate(90deg)}.actions{text-align:right;white-space:nowrap}.refreshing svg{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(-360deg)}}@media(prefers-reduced-motion:reduce){.expand-button svg{transition:none}.refreshing svg{animation:none}}
+</style>
+</head>
+<body>
+<header><p>Directorio de dominios</p><h1>Explora .sv</h1><span>Busca y filtra las consultas realizadas a SVNet.</span></header>
+<main>
+<div class="controls">
+<label>Buscar dominio<input id="search" type="search" placeholder="Ej. hola" autocomplete="off"></label>
+<button id="consult" type="button" disabled>Consultar en SVNet</button>
+<label>Estado del resultado<select id="status"><option value="">Todos</option><option value="available">Disponibles</option><option value="mixed">Variado</option><option value="unavailable">No disponibles</option><option value="unknown">Sin resultado</option></select></label>
+<label>Extensión<select id="extension"><option value="">Todas</option><option>.sv</option><option>.com.sv</option><option>.org.sv</option><option>.edu.sv</option><option>.gob.sv</option></select></label>
+</div>
+<p id="consult-status" role="status" hidden></p>
+<div class="summary"><p id="count" role="status">Cargando resultados…</p></div>
+<p id="empty" role="status" hidden></p>
+<div class="table"><table><thead><tr><th>Palabra</th><th>Estado</th><th>Disponibilidad .sv</th><th>Última indexación</th><th class="actions">Acciones</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="pagination"><button id="prev" type="button">Anterior</button><span id="page"></span><button id="next" type="button">Siguiente</button></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let page = 1, pages = 1, timer, requestId = 0, consulting = false;
+const labels = {domain:'Dominio', status:'Estado', id:'ID', administrativeContact:'Contacto administrativo', email:'Correo', phone:'Teléfono', registeredAt:'Registro', expiresAt:'Vencimiento', deletionAt:'Eliminación'};
+const dateFormatter = new Intl.DateTimeFormat('es-SV', {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'});
+function formatDate(value) {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+  if (!match) return value;
+  const [, day, month, year] = match;
+  const date = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== `${year}-${month}-${day}`) return value;
+  const parts = Object.fromEntries(dateFormatter.formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.day} de ${parts.month.replace(/\.$/, '')}, ${parts.year}`;
+}
+async function showDetail(button, row) {
+  if (button.getAttribute('aria-expanded') === 'true') {
+    row.nextElementSibling.remove(); button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver WHOIS de ${row.dataset.domain}`); button.title = `Ver WHOIS de ${row.dataset.domain}`; return;
+  }
+  button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Cerrar WHOIS de ${row.dataset.domain}`); button.title = `Cerrar WHOIS de ${row.dataset.domain}`;
+  const detail = document.createElement('tr'); detail.className = 'detail';
+  const cell = detail.insertCell(); cell.colSpan = 2; cell.textContent = 'Consultando WHOIS…'; row.after(detail);
+  try {
+    const response = await fetch('/api/whois?' + new URLSearchParams({domain: row.dataset.domain}));
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'No se pudo consultar WHOIS.');
+    const list = document.createElement('dl');
+    for (const [key, value] of Object.entries(data)) {
+      const dt = document.createElement('dt'), dd = document.createElement('dd');
+      dt.textContent = labels[key] || key;
+      dd.textContent = value == null ? '—' : ['registeredAt','expiresAt','deletionAt'].includes(key) ? formatDate(String(value)) : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+      list.append(dt, dd);
+    }
+    cell.replaceChildren(list);
+  } catch (error) { cell.className = 'detail-error'; cell.textContent = error.message; }
+}
+const statusText = {available:'Disponible', registered:'Registrado', reserved:'Palabra reservada', unknown:'Sin resultado', mixed:'Variado', unavailable:'No disponibles'};
+function badge(status, group = false) {
+  const span = document.createElement('span');
+  span.className = 'badge ' + status;
+  span.textContent = group && status === 'available' ? 'Disponibles' : statusText[status] || status;
+  return span;
+}
+function showDomains(button, row, item) {
+  if (button.getAttribute('aria-expanded') === 'true') {
+    row.nextElementSibling.remove(); button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver dominios de ${item.palabra}`); return;
+  }
+  button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Ocultar dominios de ${item.palabra}`);
+  const detail = document.createElement('tr'); detail.className = 'group-detail';
+  const cell = detail.insertCell(); cell.colSpan = 5;
+  const table = document.createElement('table'), body = document.createElement('tbody');
+  table.setAttribute('aria-label', `Dominios de ${item.palabra}`);
+  for (const domain of item.domains) {
+    const tr = document.createElement('tr'); tr.dataset.domain = domain.dominio;
+    const name = tr.insertCell(); name.className = 'domain';
+    if (['registered','mixed'].includes(domain.estado)) {
+      const whois = document.createElement('button'); whois.type = 'button'; whois.className = 'icon-button whois-button';
+      whois.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+      whois.setAttribute('aria-expanded', 'false'); whois.setAttribute('aria-label', `Ver WHOIS de ${domain.dominio}`);
+      whois.title = `Ver WHOIS de ${domain.dominio}`;
+      whois.onclick = () => showDetail(whois, tr); name.append(whois);
+    } else {
+      const space = document.createElement('span'); space.className = 'whois-space'; name.append(space);
+    }
+    if (['registered','mixed'].includes(domain.estado)) {
+      const link = document.createElement('a'); link.textContent = domain.dominio;
+      link.href = `https://${domain.dominio}`; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      name.append(link);
+    } else name.append(document.createTextNode(domain.dominio));
+    tr.insertCell().append(badge(domain.estado));
+    body.append(tr);
+  }
+  table.append(body); cell.append(table); row.after(detail);
+}
+async function load() {
+  const current = ++requestId;
+  $('count').textContent = 'Cargando resultados…';
+  $('prev').disabled = $('next').disabled = true;
+  try {
+    const params = new URLSearchParams({q:$('search').value, status:$('status').value, extension:$('extension').value, page});
+    const response = await fetch('/api/dominios?' + params);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    if (current !== requestId) return;
+    page = data.page; pages = data.pages;
+    $('count').textContent = `${data.total.toLocaleString('es')} ${data.total === 1 ? 'resultado' : 'resultados'} de ${data.count.toLocaleString('es')} ${data.count === 1 ? 'grupo' : 'grupos'}`;
+    const body = $('rows'); body.replaceChildren();
+    for (const item of data.results) {
+      const tr = document.createElement('tr');
+      const domain = tr.insertCell(); domain.className = 'domain';
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'icon-button expand-button';
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+      button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', `Ver dominios de ${item.palabra}`);
+      button.onclick = () => showDomains(button, tr, item); domain.append(button, document.createTextNode(item.palabra));
+      tr.insertCell().append(badge(item.estado, true));
+      tr.insertCell().append(badge(item.sv));
+      const indexed = tr.insertCell();
+      if (item.indexado_en) {
+        const date = new Date(item.indexado_en);
+        indexed.textContent = Number.isNaN(date.getTime()) ? 'Desconocida' : new Intl.DateTimeFormat('es-SV', {dateStyle:'medium', timeStyle:'short'}).format(date);
+      } else indexed.textContent = 'Desconocida';
+      const actions = tr.insertCell(); actions.className = 'actions';
+      const refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'icon-button';
+      refresh.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8m0-4v4h4M4 13a8 8 0 0 0 14 5l2-2m0 4v-4h-4"/></svg>';
+      refresh.setAttribute('aria-label', `Actualizar ${item.palabra}`); refresh.title = `Actualizar ${item.palabra}`;
+      refresh.onclick = async () => {
+        refresh.disabled = true; refresh.classList.add('refreshing'); refresh.setAttribute('aria-label', `Actualizando ${item.palabra}`);
+        try {
+          const response = await fetch('/api/consultar', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({word:item.palabra, refresh:true})});
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error);
+          await load();
+        } catch (error) {
+          $('count').textContent = `No se pudo actualizar ${item.palabra}: ${error.message}`;
+          refresh.disabled = false; refresh.classList.remove('refreshing'); refresh.setAttribute('aria-label', `Actualizar ${item.palabra}`);
+        }
+      };
+      actions.append(refresh);
+      body.append(tr);
+    }
+    const empty = $('empty'); empty.replaceChildren(); empty.hidden = data.total !== 0;
+    if (!data.total) empty.textContent = 'No se encontraron resultados.';
+    $('page').textContent = `Página ${page} de ${pages}`;
+    $('prev').disabled = page <= 1; $('next').disabled = page >= pages;
+  } catch (error) {
+    if (current === requestId) { $('count').textContent = error.message || 'No se pudieron cargar los resultados.'; $('rows').replaceChildren(); }
+  }
+}
+$('consult').onclick = async () => {
+  const query = $('search').value.trim();
+  if (!query || consulting) return;
+  consulting = true; $('consult').disabled = true; $('consult').textContent = 'Consultando…';
+  $('consult-status').hidden = true;
+  try {
+    const response = await fetch('/api/consultar', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({word:query, refresh:true})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    if ($('search').value.trim() === query) {
+      if (result.reserved) $('search').value = result.word;
+      $('status').value = ''; $('extension').value = ''; page = 1;
+    }
+    await load();
+  } catch (error) {
+    $('consult-status').textContent = `No se pudo consultar ${query}: ${error.message}`;
+    $('consult-status').hidden = false;
+  } finally {
+    consulting = false; $('consult').textContent = 'Consultar en SVNet';
+    $('consult').disabled = !$('search').value.trim();
+  }
+};
+$('search').addEventListener('input', () => { $('consult').disabled = consulting || !$('search').value.trim(); clearTimeout(timer); ++requestId; page = 1; timer = setTimeout(load, 300); });
+$('search').addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.isComposing && !event.repeat) {
+    event.preventDefault(); $('consult').click();
+  }
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== '/' || event.ctrlKey || event.altKey || event.metaKey || event.isComposing ||
+      event.target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName)) return;
+  event.preventDefault(); $('search').focus();
+});
+for (const id of ['status','extension']) $(id).addEventListener('change', () => { clearTimeout(timer); page = 1; load(); });
+$('prev').onclick = () => { page--; load(); };
+$('next').onclick = () => { page++; load(); };
+load();
+</script>
+</body>
+</html>

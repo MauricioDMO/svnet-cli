@@ -49,6 +49,27 @@ bun run build
 
 Atajos: `-s` para `search` y `-w` para `whois`.
 
+### Explorador y consulta masiva
+
+`svnet serve` abre el explorador en `http://127.0.0.1:3000` o el siguiente puerto libre.
+Se mantiene ejecutándose hasta pulsar Ctrl+C. Solo acepta conexiones locales.
+
+`svnet sync start` inicia en segundo plano la consulta de la lista española incluida.
+Solo puede ejecutarse una sincronización a la vez; si ya está activa, `start`
+muestra su progreso sin iniciar otra. Si falla o se interrumpe,
+vuelve a ejecutar el comando para continuar. `svnet sync status` y
+`svnet sync progress` muestran estado, palabra actual y conteos en JSON.
+
+Los resultados se guardan en `~/.local/share/svnet/dominios.sqlite` (o en
+`$XDG_DATA_HOME/svnet`). Para elegir otra carpeta, usa `SVNET_DATA_DIR`.
+Para conservar los datos anteriores, ejecuta una vez:
+
+```sh
+svnet sync import /home/mauriciodmo/core/dev/experiments/fuzz/dominios.csv
+```
+
+La importación no sobrescribe palabras ya existentes ni modifica el CSV.
+
 > **Tip:** en `whois`, un número solo se interpreta como ID. Para consultar un dominio que empieza con números, escribe el dominio completo, por ejemplo `123.sv`.
 
 ### Opciones
