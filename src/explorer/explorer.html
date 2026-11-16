@@ -71,7 +71,7 @@ async function showDetail(button, row) {
     for (const [key, value] of Object.entries(data)) {
       const dt = document.createElement('dt'), dd = document.createElement('dd');
       dt.textContent = labels[key] || key;
-      dd.textContent = value == null ? '—' : ['registeredAt','expiresAt','deletionAt'].includes(key) ? formatDate(String(value)) : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+      dd.textContent = value == null ? '—' : key === 'status' ? statusText[value] || value : ['registeredAt','expiresAt','deletionAt'].includes(key) ? formatDate(String(value)) : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
       list.append(dt, dd);
     }
     cell.replaceChildren(list);
@@ -81,7 +81,8 @@ const statusText = {available:'Disponible', registered:'Registrado', reserved:'P
 function badge(status, group = false) {
   const span = document.createElement('span');
   span.className = 'badge ' + status;
-  span.textContent = group && status === 'available' ? 'Disponibles' : statusText[status] || status;
+  span.textContent = status === 'mixed' && !group ? 'Contradictorio' : group && status === 'available' ? 'Disponibles' : statusText[status] || status;
+  if (status === 'mixed' && !group) span.title = 'Los datos indexados contienen estados distintos para este dominio; consulta WHOIS para más información.';
   return span;
 }
 function showDomains(button, row, item) {

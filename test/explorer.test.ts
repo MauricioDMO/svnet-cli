@@ -45,7 +45,11 @@ test("importación, exclusión de sincronización y API del explorador", async (
     for (const word of ["fatal", "talvez", "talo", "tala", "tal", ...Array.from({ length: 8 }, (_, i) => `talx${i}`)]) {
       insert.run(word, `${word}.sv`);
     }
+    seed.query("INSERT INTO domains VALUES ('tu', 'tu.sv', ?, ?, NULL)").run("available", null);
+    seed.query("INSERT INTO domains VALUES ('tu', 'tu.sv', ?, ?, NULL)").run("registered", 37000);
     seed.close();
+    const contradictory = await (await fetch(`${base}api/dominios?q=tu`)).json();
+    expect(contradictory.results[0]).toMatchObject({ palabra: "tu", estado: "mixed", sv: "mixed", domains: expect.arrayContaining([{ dominio: "tu.sv", estado: "mixed" }]) });
     const ranked = await (await fetch(`${base}api/dominios?q=tal`)).json();
     expect(ranked.results.map((item: { palabra: string }) => item.palabra)).toEqual(["tal", "tala", "talo", "talx0", "talx1", "talx2", "talx3", "talx4", "talx5", "talx6"]);
     const secondPage = await (await fetch(`${base}api/dominios?q=tal&page=2`)).json();

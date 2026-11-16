@@ -22,6 +22,15 @@ const WHOIS_HTML = `<div><strong>mi.sv</strong><span>Registrado</span><table>
   <tr><td>Fecha de Baja:</td><td>27-10-2027</td></tr>
   </table></div>`;
 
+test("WHOIS consulta el registro aunque SVNet también lo marque disponible", async () => {
+  const conflicting = SEARCH_HTML.replace('<h4>Dominios Disponibles</h4>', '<h4>Dominios Disponibles</h4><div class="col-12"><strong>mi.sv</strong><button>Disponible</button></div>');
+  const options = { fetch: async (_, init) => new Response(init.body.get("key") === "Buscar" ? conflicting : WHOIS_HTML) };
+  expect((await search("mi.sv", options)).map(result => result.status)).toEqual(["available", "registered"]);
+  expect(await whois("mi.sv", options)).toMatchObject({ domain: "mi.sv", status: "registered", id: 36876 });
+  const conflictingIds = conflicting.replace("</div></div>", '<div class="col-12"><strong>mi.sv</strong><button onclick="Whois(123)">Registrado</button></div></div></div>');
+  await expect(whois("mi.sv", { fetch: async () => new Response(conflictingIds) })).rejects.toThrow("múltiples");
+});
+
 test("búsqueda y WHOIS por nombre e ID, con validación y errores de transporte", async () => {
   const fetcher = mock(async (url, init) => {
     expect(url).toBe("https://svnet.sv/accion/procesos.php");
